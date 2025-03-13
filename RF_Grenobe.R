@@ -12,17 +12,29 @@ library(IC2)
 ######################################################################################################
 
 ## Data preparation
-
-grenoble.df <- read.csv("Data/GrenobleData_2017_Presid+.csv", sep = ";", header = T) %>%
+grenoble.df <- read.csv("Data/GrenobleData_2017_Presid+.csv", 
+                        sep = ";", header = TRUE) %>%
+  select(-c("AV_OPINION", "EV_OPINION")) %>%
   filter(!if_all(starts_with("EV_"), is.na)) %>%
   mutate(across(starts_with("EV_"), ~ na_if(., " None"))) %>%
-  mutate(across(starts_with("EV_"), ~ as.numeric(.)) ) %>%
+  mutate(across(starts_with("EV_"), ~ gsub(",", ".", .) %>% trimws())) %>%  # Convert commas & trim spaces
+  mutate(across(starts_with("EV_"), ~ ifelse(grepl("^10[0-6]\\.", .), NA, .))) %>%  # Set "100.", "101.", ..., "106." to NA
+  mutate(across(starts_with("EV_"), ~ ifelse(grepl("^10\\.", .), NA, .))) %>%
+  mutate(across(starts_with("EV_"), as.numeric)) %>%  # Convert to numeric
   mutate(across(starts_with("EV_"), ~ ifelse(. < 0 | . > 1, NA, .))) %>%
-  mutate(across(c("AGE", "GENDER", "EDUC", "WORK"), ~ na_if(., "NSPP"))) %>%
+  mutate(across(c("AGE", "GENDER", "EDUC", "WORK"), ~ na_if(., " NSPP"))) %>%
   rename(id = VOTER)
 
+ext.rights <- c(" NDA", " MLP")
+ext.left   <- c(" NA" , " PP", " JLM")
+ids.radright_gre <- grenoble.df$id[grenoble.df$OFFIC %in% ext.rights]
+ids.radleft_gre  <- grenoble.df$id[grenoble.df$OFFIC %in% ext.left]
+#write.csv(ids.radright_gre, "idsradrightgre.csv", row.names = F)
+#write.csv(ids.radleft_gre,  "idsradleftgre.csv", row.names = F)
+rm(ids.radleft_gre, ids.radright_gre, ext.left, ext.rights)
+
 grenoble_theil.df <- grenoble.df %>%
-  rename(temp1 = AV_OPINION, temp2 = EV_OPINION) %>%
+#  rename(temp1 = AV_OPINION, temp2 = EV_OPINION) %>%
   select(id, starts_with("AV_"), starts_with("EV_"))  %>%
   pivot_longer(cols = starts_with("EV_"), names_to = "Candidate", values_to = "Rating") %>%
   pivot_longer(cols = starts_with("AV_"), names_to = "Approval_Candidate", values_to = "Approval") %>%
@@ -81,6 +93,14 @@ ic2res.df <- ic2res %>% do.call(rbind, .) %>%
          WDP.Gini =  ifelse(Gini.within < Gini.between, 1, 0),
          WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0))
 head(ic2res.df)
+
+## Store ID's with WDP in reg.grenoble [for sec 7]
+reg.grenoble <- grenoble.df %>% 
+  select(., c("id", "GENDER", "AGE", "EDUC")) %>%
+  left_join(x = ., 
+            y = ic2res.df %>% select(., c("id", "WDP.Theil", "WDP.Gini", "WDP.Atkinson")),
+            by = "id")
+#write.csv(reg.grenoble, "reggrenoble.csv", row.names = F)
 
 ## Function to calculate the respective share of respondents with WDP
 compute_wdp_shares <- function(df) {
@@ -204,8 +224,9 @@ silh.df <- data.frame(id = optclust2.df$id,
   )
 table(silh.df$silhouette_category)
 table(silh.df$silhouette_category) / nrow(silh.df)
-
-
+## for section 7:
+strong.ids.grenoble <- silh.df$id[silh.df$silhouette_category=="strong"]
+modera.ids.grenoble <- silh.df$id[silh.df$silhouette_category !="weak"]
 ### BEGIN FANNY #############################################################
 ### ROBUSTNESS CHECK VIA FANNY
 # First step: find out the optimal cluster number for each respondent
@@ -277,3 +298,200 @@ famemb.grenoble <- data.frame(id = working.ids$id,
 table(famemb.grenoble$mmsh.share)
 ####  END FANNY ################################################
 ################################################################
+#### SECTION 6: REASONABLE ASSIGNEMENT
+## Step 1: we find out which candidate is optimally assigned to which cluster
+##    The information is in kmeans()$classes
+rowwise.kmeans.fun <- function(r, df){
+  ro <- df %>% filter(., id %in% r) 
+  res.clu <- kmeans(ro$Rating, centers = 2, nstart = 10)
+  res.fit <- fitted(res.clu, method = "centers")  
+  res2.fit <- fitted(res.clu, method = "classes")
+  res.df <- data.frame(clus = unlist(res2.fit),
+                       value = unlist(res.fit))
+  # return(res.fit)
+  return(res.df)
+}
+
+## select id's
+working.ids <- grenoble_cluster.df %>% 
+  group_by(id) %>% 
+  reframe(l = var(Rating, na.rm = T)) %>%
+  filter(., l > 0)
+
+# by grenoble01, we obtain a list: the clustering (1 or 2) and the rating values
+grenoble01 <- lapply(unique(working.ids$id), 
+                 FUN = rowwise.kmeans.fun, 
+                 df = grenoble_cluster.df)
+
+## start: cluster number transformation
+## "1": approved, "2" disapproved. We transform this to 0: disapproved, 1: approved 
+approv.cluster.fun <- function(i){
+  df <- grenoble01[i] %>% 
+    as.data.frame(.) %>% 
+    mutate(clus.assing = ifelse(value < mean(value), 0, 1))
+}
+
+approv.cluster.df <- lapply(X =1:nrow(working.ids), 
+                            FUN = approv.cluster.fun) %>%
+  do.call(rbind, .)
+## end: cluster number transformation
+##
+## greno.df: a data frame indicating who was actually approved and who 'should' have been approved
+greno.df <- cbind(grenoble_cluster.df %>% 
+                       filter(., id %in% working.ids$id),
+                 approv.cluster.df) %>%
+  mutate(match = ifelse(Approval == clus.assing, 1, 0)) %>%
+  left_join(x = .,
+            y = grenoble.df %>% select(., c("id", "AGE", "GENDER", "EDUC", "WORK")),
+            by = "id")  %>%
+  mutate(GENDER = na_if(GENDER, " NSPP"),
+         EDUC =   na_if(EDUC,   " NSPP")) %>%
+  mutate(Educ.lvl = as.numeric(ifelse(EDUC  == " S", 3, EDUC)))
+
+## A. Similarities: how many parties are identical?
+sum(greno.df$match[is.na(greno.df$match) == F]) / 
+  length(greno.df$match[is.na(greno.df$match) == F])
+# B. Match by party
+candidates <- unique(greno.df$Candidate)
+match.fun <- function(cand, df){
+  df2 <- df %>% filter(., Candidate == cand)
+  match.sh <- sum(df2$match[is.na(df2$match) == F]) / 
+    length(df2$match[is.na(df2$match) == F])
+  return(match.sh)
+}
+candmatch.list <- lapply(candidates, match.fun, df = greno.df) 
+candmatch.df <-   data.frame(
+  Candidates = candidates, 
+  match.share = unlist(candmatch.list))
+######################################################
+## Bootstrap to calculate CI
+boot_match.fun <- function(data, indices, cand) {
+  df_boot <- data[indices, ]  
+  match.fun(cand, df_boot)    
+}
+
+bootstrap_results <- lapply(candidates, function(cand) {
+  boot.out <- boot(data = greno.df, 
+                   statistic = function(d, i) boot_match.fun(d, i, cand), 
+                   R = 1000, 
+                   parallel = "multicore",
+                   ncpus = 14)
+  
+  # Extract mean and confidence intervals (percentile)
+  ci <- boot.ci(boot.out, type = "perc")$percent[4:5]
+  
+  # Return a named list
+  list(
+    Candidate = cand,
+    Match_Share = mean(boot.out$t),
+    Lower_CI = ci[1],
+    Upper_CI = ci[2]
+  )
+})
+
+candmatch.df <- do.call(rbind, lapply(bootstrap_results, as.data.frame))
+candmatch.df
+stargazer::stargazer(candmatch.df, summary = F, rownames = F)
+##############################################
+## Hypothesis: Individuals with \tilde{k}=2 exhibit a higher matching rate than 
+## individuals with k!= 2. 
+# 1. 
+#phi coefficient of correlation between two dichotomous variables
+phi.fun <- function(i, df) {
+  tryCatch({
+    data <- df %>% filter(id %in% i) %>% select(Approval, clus.assing)
+    pp <- psych::phi(table(data))
+    return(pp)
+  }, error = function(e) {
+    message("Error for id ", i, ": ", e$message)
+    return(NA)
+  })
+}
+
+phi.list <- lapply(unique(greno.df$id), phi.fun, df = greno.df)
+#summary(unlist(phi.list) )
+#phi.df <- data.frame(id = unique(greno.df$id), 
+#                     phi.value = unlist(phi.list))
+
+greno.avg <- greno.df %>% group_by(id) %>%
+  reframe(avg.match = mean(match, na.rm = T)) %>%
+  mutate(optk2 = ifelse(id %in% optclust2.df$id, "k=2", "k=2+")) %>%
+  mutate(phi.value = unlist(phi.list)) %>%
+  left_join(x = ., 
+            y = grenoble.df %>% 
+              select(., c("id", "AGE", "GENDER", "EDUC", "WORK")),
+            by = "id") %>%
+  mutate(Educ.lvl = as.numeric(ifelse(EDUC  == " S", 3, EDUC)))
+
+ols01 <- lm(formula = phi.value ~ optk2 + as.numeric(AGE) + GENDER + Educ.lvl,
+                data = greno.avg)
+#broom::tidy(logreg01, conf.int = T)
+summary(ols01)
+gtsummary::tbl_regression(ols01)
+texreg::texreg(ols01, single.row = T, label = "tb.ols", booktabs = T,
+               custom.model.names = "Grenoble")
+#write.csv(greno.avg, "Data/OLSgrenoble.csv", row.names = F)
+
+### Result: persons with opt k > 2 exhibit a significant lower phi coefficient. 
+
+
+#boot.pval::boot_summary(lm(formula = phi.value ~ optk2  + GENDER + Educ.lvl,
+#                           data = greno.avg))
+# ## Compare \tilde{k}=2 and >2
+# greno2.df <- greno.df %>%
+#   mutate(optk2 = ifelse(id %in% optclust2.df$id, "k=2", "k=2+"))
+# #  adjustment
+# match2.fun <- function(cand, df, g){
+#   df2 <- df %>% filter(., Candidate == cand, optk2 == g)
+#   match.sh <- sum(df2$match[is.na(df2$match) == F]) / 
+#     length(df2$match[is.na(df2$match) == F])
+#   return(match.sh)
+# }
+# #
+# candmatch.listk2 <-   lapply(candidates, match2.fun, df = greno2.df, g = "k=2") 
+# candmatchk2.df <-   data.frame(
+#   Candidates = candidates, 
+#   match.share = unlist(candmatch.listk2))
+# ##
+# candmatch.listk3 <-   lapply(candidates, match2.fun, df = greno2.df, g = "k=2+") 
+# candmatchk3.df <-   data.frame(
+#   Candidates = candidates, 
+#   match.share = unlist(candmatch.listk3))
+# candmatch.comp <- candmatchk2.df %>% 
+#   left_join(x = ., 
+#             y = candmatchk3.df, 
+#             by = "Candidates") %>% 
+#   setNames(c("Candidates", "Match.k2", "Match.k3"))
+
+## Consider socio-demographics
+library(lme4)  # for random-intercept models  (to consider id)
+educ.df <- data.frame(Educ = unique(graz.df$Educ),
+                      Educ.lvl = c(6, 5, 2, 3, 4, 1, NA))
+graz.df <- graz.df %>% left_join(x = .,
+                                 y = educ.df, 
+                                 by = "Educ")
+
+logreg01 <- glmer(match ~ Party + Gender + 
+                    as.numeric(Age) + Educ.lvl + 
+                    (1 | id), 
+                  family = binomial, data = grenoble.df)
+#summary(logreg01)
+#broom.mixed::tidy(logreg01, effects = "fixed", conf.int = TRUE, exponentiate = TRUE)
+#texreg::screenreg(logreg01)
+gtsummary::tbl_regression(logreg01, exponentiate = T)
+## same model without random effect (similar effects)
+logreg02 <- glm(match ~ Party + Gender + 
+                  as.numeric(Age) + Educ.lvl,
+                family = "binomial", data = graz.df)
+gtsummary::tbl_regression(logreg02, exponentiate = T)
+## model without parties
+logreg03 <- glm(match ~ Gender + 
+                  as.numeric(Age) + Educ.lvl,
+                family = "binomial", data = graz.df)
+gtsummary::tbl_regression(logreg03, exponentiate = T)
+# model with parties as random effect
+logreg04 <- glmer(match ~ Gender + 
+                    as.numeric(Age) + Educ.lvl + 
+                    (1 | Party), 
+                  family = binomial, data = graz.df)
+gtsummary::tbl_regression(logreg04, exponentiate = T)

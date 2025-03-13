@@ -53,6 +53,13 @@ austria.df <- read_excel("Data/Steirische_LTW_2019_Daten_Barbaro.xlsx") %>%
          Trich.KPÖ = Q6_5,
          Trich.NEOS = Q6_6)
 
+# extremistic
+extr.df <- austria.df %>% 
+  mutate(ext.right = ifelse(Rat.FPÖ > 17.5, 1, 0),
+         ext.left =  ifelse(Rat.KPÖ > 17.5, 1, 0)) %>%
+  select(., c("id", "ext.left", "ext.right"))
+write.csv(extr.df, "extrGraz.csv", row.names = F)
+rm(extr.df)
 # Data frame for Theil analysis
 austria_long.df <- austria.df %>%
   select(id, starts_with("Approv."), starts_with("Rat."))  %>%
@@ -61,6 +68,16 @@ austria_long.df <- austria.df %>%
   filter(substring(Party, 5) == substring(Approval_Party, 8)) %>%  # Ensure party names match
   mutate(Party = gsub("^Rat\\.", "", Party)) %>%
   select(., -c("Approval_Party"))
+
+## extremist
+#extrem.fun <- function(i){
+#  t1 <- austria_long.df %>% filter(., id == i)
+#  t2 <- t1$Party[which.max(t1$Rating)]
+#  
+#  return(t2)
+#}
+#plurality.df <- lapply(unique(austria_long.df$id), extrem.fun) %>% unlist(.)
+#austria2.df <- austria.df %>% mutate(plurality = plurality.df)#
 
 # Function to transform rating values on a [2,3]-scale
 #Transformation on a [2,3]-scale - define function
@@ -131,6 +148,14 @@ ic2res.df <- ic2res %>% do.call(rbind, .) %>%
          WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0))
 head(ic2res.df)
 
+## Store ID's with WDP in reg.austria [for sec 7]
+reg.austria <- austria.df %>% 
+  select(., c("id", "Gender", "Age", "Educ" )) %>%
+  left_join(x = ., 
+            y = ic2res.df %>% select(., c("id", "WDP.Theil", "WDP.Gini", "WDP.Atkinson")),
+            by = "id")
+#write.csv(reg.austria, "regaustria.csv", row.names = F)
+##################################################################
 compute_wdp_shares <- function(df) {
   wdp_share <- function(column) {
     valid_values <- column[!is.na(column)]  # Remove NA values
@@ -253,7 +278,8 @@ silh.df <- data.frame(id = optclust2.df$id,
   )
 table(silh.df$silhouette_category)
 table(silh.df$silhouette_category) / nrow(silh.df)
-
+strong.ids.graz <- silh.df$id[silh.df$silhouette_category=="strong"]
+modera.ids.graz <- silh.df$id[silh.df$silhouette_category !="weak"]
 ### BEGIN FANNY #############################################################
 ### ROBUSTNESS CHECK VIA FANNY
 # First step: find out the optimal cluster number for each respondent
@@ -321,92 +347,152 @@ famemb.graz <- data.frame(id = working.ids$id,
 table(famemb.graz$mmsh.share)
 ####  END FANNY ################################################
 ################################################################
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## to be removed later:
-### Robustness check: use fanny (fuzzy clustering) instead of kmeans
-fanny_optimal_clusters <- function(df, id_var, rating_var, max_k = 5) {
-  
-  results <- df %>%
-    group_by(!!sym(id_var)) %>%
-    group_split() %>%
-    lapply(function(sub_df) {
-      id_val <- unique(sub_df[[id_var]])
-      ratings <- sub_df[[rating_var]]
-      # Remove duplicates and check how many unique values exist
-      unique_ratings <- unique(ratings)
-      num_unique <- length(unique_ratings)
-      # Skip clustering if there are not enough unique values
-      if (num_unique < 2) {
-        return(data.frame(id = id_val, optimal_k = NA, best_silhouette = NA))
-      }
-      # Limit max_k to number of unique values
-      max_k_adj <- 2 #min(max_k, num_unique)
-      # Initialize silhouette scores
-      silhouette_scores <- rep(NA, max_k_adj)
-      
-      for (k in 2:max_k_adj) {
-        kmeans_result <- fanny(ratings, k = 2, metric ="euclidean")
-        cluster_labels <- kmeans_result$cluster
-        
-        # Compute silhouette score only if at least two clusters exist
-        if (length(unique(cluster_labels)) < 2) next
-        
-        sil_values <- silhouette(cluster_labels, dist(ratings))
-        silhouette_scores[k] <- mean(sil_values[, 3], na.rm = TRUE)
-      }
-      
-      # Determine the optimal number of clusters
-      if (all(is.na(silhouette_scores))) {
-        return(data.frame(id = id_val, optimal_k = NA, best_silhouette = NA))
-      }
-      
-      optimal_k <- which.max(silhouette_scores[-1]) + 1
-      best_silhouette <- max(silhouette_scores, na.rm = TRUE)
-      
-      return(data.frame(id = id_val, optimal_k = optimal_k, best_silhouette = best_silhouette))
-    }) %>%
-    bind_rows()
-  
-  return(results)
+#### SECTION 6: REASONABLE ASSIGNEMENT
+## Step 1: we find out which candidate is optimally assigned to which cluster
+##    The information is in kmeans()$classes
+rowwise.kmeans.fun <- function(r, df){
+  ro <- df %>% filter(., id %in% r) 
+  res.clu <- kmeans(ro$Rating, centers = 2, nstart = 10)
+  res.fit <- fitted(res.clu, method = "centers")  
+  res2.fit <- fitted(res.clu, method = "classes")
+  res.df <- data.frame(clus = unlist(res2.fit),
+                       value = unlist(res.fit))
+  # return(res.fit)
+  return(res.df)
 }
-# Run the function on austria_cluster.df
-fanny_clusters_df <- fanny_optimal_clusters(austria_cluster.df, "id", "Rating")
 
-optclust.fanny <- fanny_clusters_df  %>%
-  filter(id %in% optclust2.df$id) %>%
-  mutate(
-    silhouette_category = case_when(
-      best_silhouette > 0.70 ~ "strong",
-      best_silhouette > 0.50 ~ "moderate",
-      best_silhouette > 0.25 ~ "weak",
-      best_silhouette > 0    ~ "poor",
-      best_silhouette <= 0   ~ "incorrect",
-      is.na(best_silhouette) ~ NA_character_  # Keep NA if silhouette is missing
-    )
-  )
-table(optclust.fanny$silhouette_category)
-table(optclust.fanny$silhouette_category) / nrow(optclust2.df)
+## select id's
+working.ids <- austria_cluster.df %>% 
+  group_by(id) %>% 
+  reframe(l = var(Rating, na.rm = T)) %>%
+  filter(., l > 0)
 
+# by graz01, we obtain a list: the clustering (1 or 2) and the rating values
+graz01 <- lapply(unique(working.ids$id), 
+                 FUN = rowwise.kmeans.fun, 
+                 df = austria_cluster.df)
+
+## start: cluster number transformation
+## "1": approved, "2" disapproved. We transform this to 0: disapproved, 1: approved 
+approv.cluster.fun <- function(i){
+  df <- graz01[i] %>% 
+    as.data.frame(.) %>% 
+    mutate(clus.assing = ifelse(value < mean(value), 0, 1))
+}
+
+approv.cluster.df <- lapply(X =1:nrow(working.ids), 
+                            FUN = approv.cluster.fun) %>%
+  do.call(rbind, .)
+## end: cluster number transformation
 ##
+## graz.df: a data frame indicating who was actually approved and who 'should' have been approved
+graz.df <- cbind(austria_cluster.df %>% filter(., id %in% working.ids$id),
+                 approv.cluster.df) %>%
+  mutate(match = ifelse(Approval == clus.assing, 1, 0)) %>%
+  left_join(x = .,
+            y = austria.df %>% select(., c("id", "Gender", "Age", "Educ")),
+            by = "id") 
+
+## A. Similarities: how many parties are identical?
+sum(graz.df$match[is.na(graz.df$match) == F]) / 
+  length(graz.df$match[is.na(graz.df$match) == F])
+# B. Match by party
+parties <- unique(graz.df$Party)
+match.fun <- function(party, df){
+  df2 <- df %>% filter(., Party == party)
+  match.sh <- sum(df2$match[is.na(df2$match) == F]) / 
+    length(df2$match[is.na(df2$match) == F])
+}
+partymatch.list <- lapply(parties, match.fun, df = graz.df) 
+partymatch.df <-   data.frame(
+  Party = parties, 
+  match.share = unlist(partymatch.list))
+
+## Bootstrap to calculate CI
+boot_match.fun <- function(data, indices, cand) {
+  df_boot <- data[indices, ]  
+  match.fun(cand, df_boot)    
+}
+
+bootstrap_results <- lapply(parties, function(cand) {
+  boot.out <- boot(data = graz.df, 
+                   statistic = function(d, i) boot_match.fun(d, i, cand), 
+                   R = 1000, 
+                   parallel = "multicore",
+                   ncpus = 14)
+  
+  # Extract mean and confidence intervals (percentile)
+  ci <- boot.ci(boot.out, type = "perc")$percent[4:5]
+  
+  # Return a named list
+  list(
+    Party = cand,
+    Match_Share = mean(boot.out$t),
+    Lower_CI = ci[1],
+    Upper_CI = ci[2]
+  )
+})
+
+candmatch.df <- do.call(rbind, lapply(bootstrap_results, as.data.frame))
+candmatch.df
+#stargazer::stargazer(candmatch.df, summary = F, rownames = F)
+## Hypothesis: Individuals with \tilde{k}=2 exhibit a higher matching rate than 
+## individuals with k!= 2. 
+# 1. 
+#phi coefficient of correlation between two dichotomous variables
+phi.fun <- function(i, df) {
+  tryCatch({
+    data <- df %>% filter(id %in% i) %>% select(Approval, clus.assing)
+    pp <- psych::phi(table(data))
+    return(pp)
+  }, error = function(e) {
+    message("Error for id ", i, ": ", e$message)
+    return(NA)
+  })
+}
+
+phi.list <- lapply(unique(graz.df$id), phi.fun, df = graz.df)
+#summary(unlist(phi.list) )
+#phi.df <- data.frame(id = unique(greno.df$id), 
+#                     phi.value = unlist(phi.list))
+educ.df <- data.frame(Educ = unique(graz.df$Educ),
+                      Educ.lvl = c(6, 5, 2, 3, 4, 1, NA))
+age.df <- data.frame(Age = sort(unique(graz.df$Age)),
+                     Age.num = 1:7)
+graz.avg <- graz.df %>% group_by(id) %>%
+  reframe(avg.match = mean(match, na.rm = T)) %>%
+  mutate(optk2 = ifelse(id %in% optclust2.df$id, "k=2", "k=2+")) %>%
+  mutate(phi.value = unlist(phi.list)) %>%
+  left_join(x = ., 
+            y = austria.df %>% 
+              select(., c("id", "Age", "Gender", "Educ")),
+            by = "id") %>% 
+  left_join(x = ., y = educ.df, by = "Educ") %>%
+  left_join(x = ., y = age.df, by = "Age")
+
+#ols02 <- lm(formula = phi.value ~ optk2 + Age.num + Gender + Educ.lvl,
+#            data = graz.avg)
+#broom::tidy(logreg01, conf.int = T)
+#summary(ols02)
+#gtsummary::tbl_regression(ols02, conf.level = 0.95)
+#texreg::texreg(ols02, single.row = T, label = "tb.ols", booktabs = T,
+#               custom.model.names = "Graz")
+write.csv(graz.avg, "Data/OLSgraz.csv", row.names = F)
 
 
+
+
+
+## Consider socio-demographics
+library(lme4)  # for random-intercept models  (to consider id)
+educ.df <- data.frame(Educ = unique(graz.df$Educ),
+                      Educ.lvl = c(6, 5, 2, 3, 4, 1, NA))
+graz.df <- graz.df %>% left_join(x = .,
+                                 y = educ.df, 
+                                 by = "Educ")
+
+logreg01 <- glmer(match ~ Party + Gender + 
+                    as.numeric(Age) + Educ.lvl + 
+                    (1 | id), 
+                  family = binomial, data = graz.df)
+#summary(logreg01)

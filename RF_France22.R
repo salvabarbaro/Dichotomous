@@ -21,6 +21,16 @@ scale_to_range <- function(x, new_min, new_max) {
   return(scaled_x)
 }
 
+ids.right <- c("Eric Zemmour", "Marine Le Pen", "Nicolas Dupont-Aignan")
+ids.left  <- c("Jean-Luc Mélenchon", "Nathalie Artaud", "Philippe Poutou", "Fabien Roussel")
+extr.France22 <- france22.df %>% 
+  mutate(ext.right = ifelse(plurality %in% ids.right, 1, 0),
+         ext.left  = ifelse(plurality %in% ids.left,  1, 0)) %>%
+  select(., c("id", starts_with("ext.")))
+write.csv(extr.France22, "extrFR22.csv", row.names = F)
+rm(ids.right, ids.left, extr.France22)
+
+
 france_long.df <- france22.df %>%
   select(id, starts_with("AV_"), starts_with("EV_"))  %>%
   pivot_longer(cols = starts_with("EV_"), names_to = "Candidate", values_to = "Approval") %>%
@@ -87,6 +97,14 @@ ic2res.df <- ic2res %>% do.call(rbind, .) %>%
          WDP.Gini =  ifelse(Gini.within < Gini.between, 1, 0),
          WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0))
 #head(ic2res.df)
+
+## Store ID's with WDP in reg.france [for sec 7]
+reg.france <- france22.df %>% 
+  select(., c("id", "Gender", "Age", "studies")) %>%
+  left_join(x = ., 
+            y = ic2res.df %>% select(., c("id", "WDP.Theil", "WDP.Gini", "WDP.Atkinson")),
+            by = "id")
+write.csv(reg.france, "regfrance.csv", row.names = F)
 
 ## Function to calculate the respective share of respondents with WDP
 compute_wdp_shares <- function(df) {
@@ -209,7 +227,8 @@ silh.df <- data.frame(id = optclust2.df$id,
   )
 table(silh.df$silhouette_category)
 table(silh.df$silhouette_category) / nrow(silh.df)
-
+strong.ids.france <- silh.df$id[silh.df$silhouette_category=="strong"]
+modera.ids.france <- silh.df$id[silh.df$silhouette_category !="weak"]
 ### BEGIN FANNY #############################################################
 ### ROBUSTNESS CHECK VIA FANNY
 # First step: find out the optimal cluster number for each respondent
@@ -387,4 +406,37 @@ candmatch.df <- do.call(rbind, lapply(bootstrap_results, as.data.frame))
 candmatch.df
 stargazer::stargazer(candmatch.df, summary = F, rownames = F)
 
+##############################################
+## Hypothesis: Individuals with \tilde{k}=2 exhibit a higher matching rate than 
+## individuals with k!= 2. 
+# 1. 
+#phi coefficient of correlation between two dichotomous variables
+phi.fun <- function(i, df) {
+  tryCatch({
+    data <- df %>% filter(id %in% i) %>% select(Approval, clus.assing)
+    pp <- psych::phi(table(data))
+    return(pp)
+  }, error = function(e) {
+    message("Error for id ", i, ": ", e$message)
+    return(NA)
+  })
+}
 
+phi.list <- lapply(unique(fra.df$id), phi.fun, df = fra.df)
+#summary(unlist(phi.list) )
+#phi.df <- data.frame(id = unique(greno.df$id), 
+#                     phi.value = unlist(phi.list))
+
+fra.avg <- fra.df %>% group_by(id) %>%
+  reframe(avg.match = mean(match, na.rm = T)) %>%
+  mutate(optk2 = ifelse(id %in% optclust2.df$id, "k=2", "k=2+")) %>%
+  mutate(phi.value = unlist(phi.list)) %>%
+  left_join(x = ., 
+            y = fra.df %>% 
+              select(., c("id", "Age.num", "Gender", "Educ.lvl")),
+            by = "id") %>% rename(Age = Age.num) %>% distinct()
+
+ols03 <- lm(formula = phi.value ~ optk2 + Age + Gender + Educ.lvl,
+            data = fra.avg)
+gtsummary::tbl_regression(ols03)
+write.csv(fra.avg, "Data/OLSfra.csv", row.names = F)
