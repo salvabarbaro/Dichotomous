@@ -7,9 +7,10 @@ library(ggplot2)
 library(ineq)
 library(rstatix)
 library(tidyr)
-library(IC2)
+library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
 library(parallel)
 library(gtsummary)
+library(modelsummary)
 
 ## Read Data  (see Merge.R in Data/France22/)
 france22.df <- read.csv("Data/France22.csv", header = T)
