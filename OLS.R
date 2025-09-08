@@ -1,32 +1,36 @@
-setwd("~/Documents/Research/Dichotomous")
+setwd("~/Documents/Research/Dichotomous/github/Dichotomous/")
 library(dplyr)
 library(texreg)
+library(tidyverse)
+library(modelsummary)
 #library(gtsummary)
 ##
 ## Grenoble data
-idsradrightgre <- read.csv("~/Documents/Research/Dichotomous/idsradrightgre.csv", 
+idsradrightgre <- read.csv("DATA/idsradrightgre.csv", 
                            sep="", header = T) 
-idsradleftgre <- read.csv("~/Documents/Research/Dichotomous/idsradleftgre.csv", 
+idsradleftgre <- read.csv("DATA/idsradleftgre.csv", 
                            sep="", header = T) 
-greno.avg <- read.csv("Data/OLSgrenoble.csv", header = T) %>%
+greno.avg <- read.csv("DATA/OLSgrenoble.csv", header = T) %>%
   mutate(ext.left =  ifelse(id %in% idsradleftgre$x, 1, 0),
-         ext.right = ifelse(id %in% idsradrightgre$x, 1, 0))
+         ext.right = ifelse(id %in% idsradrightgre$x, 1, 0)) %>%
+  mutate(Age = as.numeric(AGE))
 rm(idsradleftgre, idsradrightgre)
 
-ols01 <- lm(formula = phi.value ~ optk2 + as.numeric(AGE) + 
+ols01 <- lm(formula = phi.value ~ optk2 + Age + 
               GENDER + Educ.lvl + 
               factor(ext.left) + factor(ext.right),
             data = greno.avg)
 
 summary(ols01)
+modelsummary(ols01)
 #gtsummary::tbl_regression(ols01)
 #texreg::texreg(ols01, single.row = T, label = "tb.ols", booktabs = T,
 #               custom.model.names = "Grenoble")
 #texreg::screenreg(ols01)
 #########################################################################
 ## Graz data
-extr.graz <- read.csv("extrGraz.csv", header = T)
-graz.avg <- read.csv("Data/OLSgraz.csv", header = T) %>%
+extr.graz <- read.csv("DATA/extrGraz.csv", header = T)
+graz.avg <- read.csv("DATA/OLSgraz.csv", header = T) %>%
   left_join(x = ., y = extr.graz, by = "id")
 rm(extr.graz)
 ols02 <- lm(formula = phi.value ~ optk2 + Age.num + Gender + Educ.lvl +
@@ -36,16 +40,20 @@ summary(ols02)
 #gtsummary::tbl_regression(ols02)
 
 # France22 data
-extr.fr22 <- read.csv("extrFR22.csv", header = TRUE)
-fra.avg <- read.csv("Data/OLSfra.csv", header = T) %>% distinct(.) %>%
+extr.fr22 <- read.csv("DATA/extrFR22.csv", header = TRUE)
+fra.avg <- read.csv("DATA/OLSfra.csv", header = T) %>% distinct(.) %>%
   left_join(x = ., y = extr.fr22, by = "id")
 rm(extr.fr22)
 ols03 <- lm(formula = phi.value ~ optk2 +  Age + Gender + Educ.lvl +
               factor(ext.right) + factor(ext.left), 
             data = fra.avg)
-gtsummary::tbl_regression(ols03)
+summary(ols03)
 
-#texreg(l = list(ols01, ols02, ols03))
+modelsummary(list(ols01, ols02, ols03),
+            stars = TRUE
+          #  estimate = "{estimate}{stars}"
+          )
+
 
 
 # Common dataset for FE-Regression
@@ -81,6 +89,8 @@ ols.list <- lapply(unique(ols.df$df), FUN = function(i){
      data = ols.df %>% filter(., df == i) ) 
   } )
 texreg::screenreg(l = ols.list)
+modelsummary(ols.list, stars = TRUE)
+
 
 custom.names <- c("(Intercept)" = "Intercept",
                   "optk2B" = "$\tilde{k}>2$",

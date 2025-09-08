@@ -1,4 +1,4 @@
-library(purrr)
+#library(purrr)
 library(dplyr)
 library(cluster)
 library(factoextra)
@@ -8,6 +8,8 @@ library(rstatix)
 library(tidyr)
 library(IC2)
 library(parallel)
+library(scales)
+library(latex2exp)
 
 ## Cluster analyses on CSES data
 setwd("~/Documents/Research/Dichotomous/github/Dichotomous/DATA/")
@@ -31,6 +33,20 @@ cs_p.df <- cses %>%
 #
 length(unique(cs_p.df$case_ID))  # number of elections
 length(unique(cs_p.df$id))       # number of respondents
+cs_p.df %>%
+  mutate(Country = sub("_.*", "", case_ID)) %>%   # take everything before the underscore
+  summarise(n_countries = n_distinct(Country))  # number of countries
+respondents_summary <- cs_p.df %>%
+  group_by(case_ID) %>%
+  summarise(n_respondents = n_distinct(id), .groups = "drop")
+respondents_summary %>%
+  summarise(
+    min     = min(n_respondents),
+    mean    = mean(n_respondents),
+    max     = max(n_respondents),
+    n_cases = n()  # nb elections
+  )
+rm(respondents_summary)
 #################################################################################################
 ## Cluster-analytical function
 kmax <- 4
@@ -98,7 +114,36 @@ summary_tables <- bind_rows(res.list) %>%
 
 write.csv(summary_tables, "csesSummary.csv", row.names = F)
 
+summary_tables <- read.csv("csesSummary.csv", header = T)
+sapply(res[,6:8], mean)
 
+res_long <- res %>%
+  pivot_longer(cols = ends_with("pct"),
+               names_to = "k_type",
+               values_to = "percent") %>%
+  mutate(k_type = recode(k_type,
+                         "k_2_pct" = "k2",
+                         "k_3_pct" = "k3",
+                         "k_4_pct" = "k4"))
+
+
+p1 <- ggplot(res_long, aes(x = k_type, y = percent)) +
+  geom_boxplot(fill = "steelblue", colour = "darkblue", alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.5, colour = "darkred") +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  scale_x_discrete(labels = c(
+    "k2" = TeX("$\\tilde{k}=2$"),
+    "k3" = TeX("$\\tilde{k}=3$"),
+    "k4" = TeX("$\\tilde{k}=4$")
+  )) +
+  labs(x = NULL, y = "Percentage") +
+  theme_minimal(base_size = 22) +
+  theme(legend.position = "none")
+ggsave("~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/cses.pdf", plot = p1, width = 16, height = 9)
+
+
+
+###########################################################
 
 
 
