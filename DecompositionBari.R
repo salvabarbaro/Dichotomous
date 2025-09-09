@@ -139,8 +139,8 @@ gini_within_add_path(incomes = df$inc, group = df$group)
 
 ## france_theil.df
 
-test.df <- france_theil.df %>% filter(., id == 9)
-gini_within_add_path(incomes = test.df$Rating, group = test.df$Approval)
+test.df <- france_theil.df %>% filter(., id == 6)
+gini_within_add_path(incomes = test.df$Rating, group = test.df$Approval)[1]
 gini_between_add(incomes = test.df$Rating, group = test.df$Approval)
 
 

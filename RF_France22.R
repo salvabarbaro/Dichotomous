@@ -1,10 +1,11 @@
-setwd("~/Documents/Research/Dichotomous/")
+setwd("~/Documents/Research/Dichotomous/github/Dichotomous")
 #########################################
 library(dplyr)
 library(cluster)
 library(factoextra)
 library(ggplot2)
 library(ineq)
+library(dineq)
 library(rstatix)
 library(tidyr)
 library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
@@ -13,7 +14,7 @@ library(gtsummary)
 library(modelsummary)
 
 ## Read Data  (see Merge.R in Data/France22/)
-france22.df <- read.csv("Data/France22.csv", header = T)
+france22.df <- read.csv("DATA/France22.csv", header = T)
 ###
 scale_to_range <- function(x, new_min, new_max) {
   old_min <- min(x, na.rm = T)
@@ -98,7 +99,6 @@ ic2res.df <- ic2res %>% do.call(rbind, .) %>%
          WDP.Gini =  ifelse(Gini.within < Gini.between, 1, 0),
          WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0))
 #head(ic2res.df)
-
 ## Store ID's with WDP in reg.france [for sec 7]
 reg.france <- france22.df %>% 
   select(., c("id", "Gender", "Age", "studies")) %>%
@@ -123,6 +123,59 @@ compute_wdp_shares <- function(df) {
 }
 ## Values for Table 2:
 compute_wdp_shares(ic2res.df)
+#### Robustness Checks with Bhattacharya and Mahalanobis [G_wit_add or GwA] 
+## and Foster and Shneyerov [G_wit_path or GwP], as well as cv
+load("DATA/Moramarco.RData")
+robustnesscheck.decomp.fun <- function(i) {
+  tryCatch({
+    df <- france_theil.df %>% 
+      filter(id %in% i) %>% 
+      mutate(Approval = factor(Approval)) 
+    w1 <- gini_within_add_path(incomes = df$Rating, group = df$Approval)[1]  #Bhattacharya and Mahalanobis
+    w2 <- gini_within_add_path(incomes = df$Rating, group = df$Approval)[2]  #Foster and Shneyerov
+    b <- gini_between_add(incomes = df$Rating, group = df$Approval) #computes the between group component of the additive decomposition.
+    scv.within <- scv_decomp(df)$SCV_within
+    scv.between <- scv_decomp(df)$SCV_between
+    # Store results in a data frame
+    res.df <- data.frame(
+      id = unique(df$id),
+      BM.within = w1,
+      FS.within = w2,
+      Additive.between = b,
+      scv.within = scv.within,
+      scv.between = scv.between 
+    )
+    return(res.df)
+  }, error = function(e) {
+    message(paste("Skipping id:", i, "due to error:", e$message))
+  })
+}
+
+res.RC <- lapply(unique(france_theil.df$id), robustnesscheck.decomp.fun)
+resRC.df <- res.RC %>% do.call(rbind, .)  %>%
+  mutate(WDP.BM =  ifelse(BM.within < Additive.between, 1, 0),
+         WDP.FS =  ifelse(FS.within < Additive.between, 1, 0),
+         WDP.SCV = ifelse(scv.within < scv.between, 1, 0))
+
+compute_wdp_shares.RC <- function(df) {
+  wdp_share <- function(column) {
+    valid_values <- column[!is.na(column)]  # Remove NA values
+    if (length(valid_values) == 0) return(NA)  # Avoid division by zero
+    return(sum(valid_values) / length(valid_values))
+  }
+  
+  return(c(
+    BM = wdp_share(df$WDP.BM),
+    FS = wdp_share(df$WDP.FS),
+    SCV = wdp_share(df$WDP.SCV)
+  ))
+}
+## Values for Table 2:
+compute_wdp_shares.RC(resRC.df)
+
+
+
+rm(gini_between_add, gini_coefficient, gini_within_add_path)
 ####################################################################
 ## Bootstrap
 # Function to compute WDP shares
