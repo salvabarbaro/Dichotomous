@@ -12,6 +12,7 @@ library(IC2)  # use remotes::install_version("IC2"), the library is no longer ma
 library(parallel)
 library(gtsummary)
 library(modelsummary)
+library(rlang)
 
 ## Read Data  (see Merge.R in Data/France22/)
 france22.df <- read.csv("DATA/France22.csv", header = T)
@@ -43,8 +44,8 @@ france_long.df <- france22.df %>%
 newratings <- scale_to_range(x = france_long.df$Rating, 2,3)
 
 france_theil.df <- france_long.df %>%
-  mutate(Rating = newratings)
-
+  mutate(Rating = newratings) 
+rm(newratings)  ## clean up
 
 france_cluster.df <- france_theil.df %>% 
   group_by(id) %>%
@@ -53,51 +54,16 @@ france_cluster.df <- france_theil.df %>%
 ###
 #######################################################
 ### Section 3: Decomposition analysis
-
-ic2decomp.fun <- function(i) {
-  tryCatch({
-    df <- france_theil.df %>% 
-      filter(id %in% i) %>% 
-      mutate(Approval = factor(Approval)) 
-    
-    dec <- decompGEI(x = df$Rating, z = df$Approval, alpha = 1, ELMO = FALSE)
-    th.total <- as.numeric(dec$ineq$index)
-    th.within <- as.numeric(dec$decomp$within)
-    th.between <- as.numeric(dec$decomp$between)
-    # Compute Gini decomposition
-    gin <- decompSGini(x = df$Rating, z = df$Approval, decomp = "YL", ELMO = FALSE)
-    gi.total <- as.numeric(gin$ineq$index)
-    gi.within <- as.numeric(gin$decomp$within)
-    gi.between <- as.numeric(gin$decomp$between)
-    # Compute Atkinson decomposition
-    atk <- decompAtkinson(x = df$Rating, z = df$Approval, decomp = "BDA", epsilon = 1)
-    atk.total <- as.numeric(atk$ineq$index)
-    atk.within <- as.numeric(atk$decomp$within)
-    atk.between <- as.numeric(atk$decomp$between)
-    # Store results in a data frame
-    res.df <- data.frame(
-      id = unique(df$id),
-      Theil.tot = th.total,
-      Theil.within = th.within,
-      Theil.between = th.between,
-      Gini.tot = gi.total,
-      Gini.within = gi.within,
-      Gini.between = gi.between,
-      Atkinson.tot = atk.total,
-      Atkinson.within = atk.within,
-      Atkinson.between = atk.between
-    )
-    return(res.df)
-  }, error = function(e) {
-    message(paste("Skipping id:", i, "due to error:", e$message))
-  })
-}
-
-ic2res <- lapply(unique(france_theil.df$id), ic2decomp.fun)
+load("AuxFunctions.RData")
+ic2res <- mclapply(unique(france_theil.df$id), ic2decomp.fun, data = france_theil.df, mc.cores = 8)
 ic2res.df <- ic2res %>% do.call(rbind, .) %>%
   mutate(WDP.Theil = ifelse(Theil.within < Theil.between, 1, 0),
          WDP.Gini =  ifelse(Gini.within < Gini.between, 1, 0),
-         WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0))
+         WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0),
+         WDP.SCV = ifelse(SCV.within < SCV.between, 1, 0)
+#         WDP.VAR = ifelse(VAR.within < VAR.between, 0, 1)
+#         WDP.MLD = ifelse(MLD.within < MLD.between, 1, 0)
+        )
 #head(ic2res.df)
 ## Store ID's with WDP in reg.france [for sec 7]
 reg.france <- france22.df %>% 
@@ -108,95 +74,29 @@ reg.france <- france22.df %>%
 write.csv(reg.france, "regfrance.csv", row.names = F)
 
 ## Function to calculate the respective share of respondents with WDP
-compute_wdp_shares <- function(df) {
-  wdp_share <- function(column) {
+wdp_share <- function(column) {
     valid_values <- column[!is.na(column)]  # Remove NA values
     if (length(valid_values) == 0) return(NA)  # Avoid division by zero
     return(sum(valid_values) / length(valid_values))
   }
-  
+compute_wdp_shares <- function(df) {  
   return(c(
     Theil = wdp_share(df$WDP.Theil),
     Gini = wdp_share(df$WDP.Gini),
-    Atkinson = wdp_share(df$WDP.Atkinson)
+    Atkinson = wdp_share(df$WDP.Atkinson),
+    SCV = wdp_share(df$WDP.SCV)#,
+#    VAR = wdp_share(df$WDP.VAR) 
+#    MLD = wdp_share(df$WDP.MLD)
   ))
 }
 ## Values for Table 2:
 compute_wdp_shares(ic2res.df)
-#### Robustness Checks with Bhattacharya and Mahalanobis [G_wit_add or GwA] 
-## and Foster and Shneyerov [G_wit_path or GwP], as well as cv
-load("DATA/Moramarco.RData")
-robustnesscheck.decomp.fun <- function(i) {
-  tryCatch({
-    df <- france_theil.df %>% 
-      filter(id %in% i) %>% 
-      mutate(Approval = factor(Approval)) 
-    w1 <- gini_within_add_path(incomes = df$Rating, group = df$Approval)[1]  #Bhattacharya and Mahalanobis
-    w2 <- gini_within_add_path(incomes = df$Rating, group = df$Approval)[2]  #Foster and Shneyerov
-    b <- gini_between_add(incomes = df$Rating, group = df$Approval) #computes the between group component of the additive decomposition.
-    scv.within <- scv_decomp(df)$SCV_within
-    scv.between <- scv_decomp(df)$SCV_between
-    # Store results in a data frame
-    res.df <- data.frame(
-      id = unique(df$id),
-      BM.within = w1,
-      FS.within = w2,
-      Additive.between = b,
-      scv.within = scv.within,
-      scv.between = scv.between 
-    )
-    return(res.df)
-  }, error = function(e) {
-    message(paste("Skipping id:", i, "due to error:", e$message))
-  })
-}
-
-res.RC <- lapply(unique(france_theil.df$id), robustnesscheck.decomp.fun)
-resRC.df <- res.RC %>% do.call(rbind, .)  %>%
-  mutate(WDP.BM =  ifelse(BM.within < Additive.between, 1, 0),
-         WDP.FS =  ifelse(FS.within < Additive.between, 1, 0),
-         WDP.SCV = ifelse(scv.within < scv.between, 1, 0))
-
-compute_wdp_shares.RC <- function(df) {
-  wdp_share <- function(column) {
-    valid_values <- column[!is.na(column)]  # Remove NA values
-    if (length(valid_values) == 0) return(NA)  # Avoid division by zero
-    return(sum(valid_values) / length(valid_values))
-  }
-  
-  return(c(
-    BM = wdp_share(df$WDP.BM),
-    FS = wdp_share(df$WDP.FS),
-    SCV = wdp_share(df$WDP.SCV)
-  ))
-}
-## Values for Table 2:
-compute_wdp_shares.RC(resRC.df)
-
-
-
-rm(gini_between_add, gini_coefficient, gini_within_add_path)
 ####################################################################
 ## Bootstrap
-# Function to compute WDP shares
-compute_wdp_shares <- function(df) {
-  wdp_share <- function(column) {
-    valid_values <- column[!is.na(column)]  # Remove NA values
-    if (length(valid_values) == 0) return(NA)  # Avoid division by zero
-    return(sum(valid_values) / length(valid_values))
-  }
-  
-  return(c(
-    Theil = wdp_share(df$WDP.Theil),
-    Gini = wdp_share(df$WDP.Gini),
-    Atkinson = wdp_share(df$WDP.Atkinson)
-  ))
-}
-
 # Custom bootstrapping function
 cluster_bootstrap <- function(df, id_col, R = 1000) {
   unique_ids <- unique(df[[id_col]])  # Unique id values
-  boot_results <- matrix(NA, nrow = R, ncol = 3)  # Store bootstrap results
+  boot_results <- matrix(NA, nrow = R, ncol = 4)  # Store bootstrap results
   
   for (r in 1:R) {
     sampled_ids <- sample(unique_ids, replace = TRUE)  # Resample IDs
@@ -205,7 +105,7 @@ cluster_bootstrap <- function(df, id_col, R = 1000) {
     boot_results[r, ] <- compute_wdp_shares(boot_df)  # Compute WDP shares
   }
   
-  colnames(boot_results) <- c("Theil", "Gini", "Atkinson")
+  colnames(boot_results) <- c("Theil", "Gini", "Atkinson", "SCV")
   return(as.data.frame(boot_results))
 }
 
@@ -214,7 +114,28 @@ set.seed(55234)
 boot_results <- cluster_bootstrap(ic2res.df, id_col = "id", R = 1000)
 # Compute confidence intervals by percentile method
 apply(boot_results, 2, quantile, probs = c(0.025, 0.975))  # 95% CI
-rm(boot_results, ic2res, ic2res.df, france_long.df)
+############################################################################
+## Robustness Check according to the proposed method by Fleurbaey, Lambert,... 
+out1 <- fleurbaey_pipeline(france_theil.df)
+
+# With your external table ic2res.df (must have columns id and Gini.between):
+out2 <- fleurbaey_pipeline(
+  data = france_theil.df,
+  join_df = ic2res.df,
+  id_col = "id",
+  income_col = "Rating",
+  group_col = "Approval",
+  join_id_col = "id",
+  join_between_col = "BM.between"
+)
+
+#out2$res_ids
+#out2$fleurbaey
+out2$wdp_table
+#out2$resnew_summ
+rm(boot_results, ic2res, ic2res.df, france_long.df, cv_decomp_bm)
+
+
 
 ##########################################################################
 ### SECTION 4: Cluster Analysis

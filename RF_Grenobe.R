@@ -1,18 +1,22 @@
-setwd("~/Documents/Research/Dichotomous")
+setwd("~/Documents/Research/Dichotomous/github/Dichotomous")
 
-library(cluster)
+#########################################
 library(dplyr)
-library(ggplot2)
+library(cluster)
 library(factoextra)
-library(boot)
-library(parallel)
+library(ggplot2)
+library(ineq)
+library(dineq)
+library(rstatix)
 library(tidyr)
-library(IC2)
-
+library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
+library(parallel)
+library(gtsummary)
+library(modelsummary)
+library(rlang)
 ######################################################################################################
-
 ## Data preparation
-grenoble.df <- read.csv("Data/GrenobleData_2017_Presid+.csv", 
+grenoble.df <- read.csv("DATA/GrenobleData_2017_Presid+.csv", 
                         sep = ";", header = TRUE) %>%
   select(-c("AV_OPINION", "EV_OPINION")) %>%
   filter(!if_all(starts_with("EV_"), is.na)) %>%
@@ -48,50 +52,15 @@ grenoble_cluster.df <- grenoble_theil.df %>%
 
 #######################################################
 ### Section 3: Decomposition analysis
-ic2decomp.fun <- function(i) {
-  tryCatch({
-    df <- grenoble_theil.df %>% 
-      filter(id %in% i) %>% 
-      mutate(Approval = factor(Approval)) 
-    
-    dec <- decompGEI(x = df$Rating, z = df$Approval, alpha = 1, ELMO = FALSE)
-    th.total <- as.numeric(dec$ineq$index)
-    th.within <- as.numeric(dec$decomp$within)
-    th.between <- as.numeric(dec$decomp$between)
-    # Compute Gini decomposition
-    gin <- decompSGini(x = df$Rating, z = df$Approval, decomp = "YL", ELMO = FALSE)
-    gi.total <- as.numeric(gin$ineq$index)
-    gi.within <- as.numeric(gin$decomp$within)
-    gi.between <- as.numeric(gin$decomp$between)
-    # Compute Atkinson decomposition
-    atk <- decompAtkinson(x = df$Rating, z = df$Approval, decomp = "BDA", epsilon = 1)
-    atk.total <- as.numeric(atk$ineq$index)
-    atk.within <- as.numeric(atk$decomp$within)
-    atk.between <- as.numeric(atk$decomp$between)
-    # Store results in a data frame
-    res.df <- data.frame(
-      id = unique(df$id),
-      Theil.tot = th.total,
-      Theil.within = th.within,
-      Theil.between = th.between,
-      Gini.tot = gi.total,
-      Gini.within = gi.within,
-      Gini.between = gi.between,
-      Atkinson.tot = atk.total,
-      Atkinson.within = atk.within,
-      Atkinson.between = atk.between
-    )
-    return(res.df)
-  }, error = function(e) {
-    message(paste("Skipping id:", i, "due to error:", e$message))
-  })
-}
+load("AuxFunctions.RData")
 
-ic2res <- lapply(unique(grenoble_theil.df$id), ic2decomp.fun)
+ic2res <- mclapply(unique(grenoble_theil.df$id), ic2decomp.fun, data = grenoble_theil.df, mc.cores = 8)
 ic2res.df <- ic2res %>% do.call(rbind, .) %>%
   mutate(WDP.Theil = ifelse(Theil.within < Theil.between, 1, 0),
          WDP.Gini =  ifelse(Gini.within < Gini.between, 1, 0),
-         WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0))
+         WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0),
+         WDP.SCV = ifelse(SCV.within < SCV.between, 1, 0)
+        )
 head(ic2res.df)
 
 ## Store ID's with WDP in reg.grenoble [for sec 7]
@@ -103,42 +72,29 @@ reg.grenoble <- grenoble.df %>%
 #write.csv(reg.grenoble, "reggrenoble.csv", row.names = F)
 
 ## Function to calculate the respective share of respondents with WDP
-compute_wdp_shares <- function(df) {
-  wdp_share <- function(column) {
+wdp_share <- function(column) {
     valid_values <- column[!is.na(column)]  # Remove NA values
     if (length(valid_values) == 0) return(NA)  # Avoid division by zero
     return(sum(valid_values) / length(valid_values))
   }
-  
+compute_wdp_shares <- function(df) {  
   return(c(
     Theil = wdp_share(df$WDP.Theil),
     Gini = wdp_share(df$WDP.Gini),
-    Atkinson = wdp_share(df$WDP.Atkinson)
+    Atkinson = wdp_share(df$WDP.Atkinson),
+    SCV = wdp_share(df$WDP.SCV)#,
+#    VAR = wdp_share(df$WDP.VAR) 
+#    MLD = wdp_share(df$WDP.MLD)
   ))
 }
 ## Values for Table 2:
 compute_wdp_shares(ic2res.df)
 ####################################################################
 ## Bootstrap
-# Function to compute WDP shares
-compute_wdp_shares <- function(df) {
-  wdp_share <- function(column) {
-    valid_values <- column[!is.na(column)]  # Remove NA values
-    if (length(valid_values) == 0) return(NA)  # Avoid division by zero
-    return(sum(valid_values) / length(valid_values))
-  }
-  
-  return(c(
-    Theil = wdp_share(df$WDP.Theil),
-    Gini = wdp_share(df$WDP.Gini),
-    Atkinson = wdp_share(df$WDP.Atkinson)
-  ))
-}
-
-# Custom bootstrapping function
+## Bootstrap
 cluster_bootstrap <- function(df, id_col, R = 1000) {
   unique_ids <- unique(df[[id_col]])  # Unique id values
-  boot_results <- matrix(NA, nrow = R, ncol = 3)  # Store bootstrap results
+  boot_results <- matrix(NA, nrow = R, ncol = 4)  # Store bootstrap results
   
   for (r in 1:R) {
     sampled_ids <- sample(unique_ids, replace = TRUE)  # Resample IDs
@@ -147,7 +103,7 @@ cluster_bootstrap <- function(df, id_col, R = 1000) {
     boot_results[r, ] <- compute_wdp_shares(boot_df)  # Compute WDP shares
   }
   
-  colnames(boot_results) <- c("Theil", "Gini", "Atkinson")
+  colnames(boot_results) <- c("Theil", "Gini", "Atkinson", "SCV")
   return(as.data.frame(boot_results))
 }
 
@@ -158,6 +114,27 @@ boot_results <- cluster_bootstrap(ic2res.df, id_col = "id", R = 1000)
 apply(boot_results, 2, quantile, probs = c(0.025, 0.975))  # 95% CI
                                            
 ##########################################################################
+## Robustness Check according to the proposed method by Fleurbaey, Lambert,... 
+out1 <- fleurbaey_pipeline(grenoble_theil.df)
+
+# With your external table ic2res.df (must have columns id and Gini.between):
+out2 <- fleurbaey_pipeline(
+  data = grenoble_theil.df,
+  join_df = ic2res.df,
+  id_col = "id",
+  income_col = "Rating",
+  group_col = "Approval",
+  join_id_col = "id",
+  join_between_col = "BM.between"
+)
+
+#out2$res_ids
+#out2$fleurbaey
+out2$wdp_table
+#out2$resnew_summ
+rm(boot_results, ic2res, ic2res.df, bm_between_vec, cluster_bootstrap, compute_wdp_shares, cv_decomp_bm, 
+   fleurbaey_pipeline, gini_between_add, gini_coefficient, gini_within_add_path)
+
 ### SECTION 4: Cluster Analysis
 ## Cluster analysis
 # Step 1: We remove all id's without variance in the Rating
