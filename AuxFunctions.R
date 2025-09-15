@@ -7,6 +7,7 @@
 # 4. bm_between_vec calculates the Gini-between dispersion based on BM. Equivalent to IC2::decompSGini(... decomp = "BM")
 # 5. fleurbaey_pipeline calculates the comparision proposed by Fleurbaey et. al. 2025, SocChWelf
 # 6. ic2decomp.fun calculates the four different decompositions shown in Fig 3 of the paper
+# 7. Function to calculate the respective share of respondents with WDP
 ########################################################################################################
 # 1. 
 # Decompose by squared coefficient of variation (SCV = Var / mu^2)
@@ -203,7 +204,7 @@ fleurbaey_pipeline <- function(
     return(list(res_ids = res_ids))
   }
 
-  # Join with external per-id BM and compute WDP.Fleurbaey (using 0.5*Res_new as in your code)
+  # Join with external per-id BM and compute WDP.Fleurbaey
   join_id_sym  <- sym(join_id_col)
   join_bm_sym  <- sym(join_between_col)
 
@@ -314,5 +315,23 @@ ic2decomp.fun <- function(i, data) {
     message(paste("Skipping id:", i, "due to error:", e$message))
   })
 }
+
+#7.  Function to calculate the respective share of respondents with WDP
+wdp_share <- function(column) {
+    valid_values <- column[!is.na(column)]  # Remove NA values
+    if (length(valid_values) == 0) return(NA)  # Avoid division by zero
+    return(sum(valid_values) / length(valid_values))
+  }
+compute_wdp_shares <- function(df) {  
+  return(c(
+    Theil = wdp_share(df$WDP.Theil),
+    Gini = wdp_share(df$WDP.Gini),
+    Atkinson = wdp_share(df$WDP.Atkinson),
+    SCV = wdp_share(df$WDP.SCV)#,
+#    VAR = wdp_share(df$WDP.VAR) 
+#    MLD = wdp_share(df$WDP.MLD)
+  ))
+}
+
 
 save.image("~/Documents/Research/Dichotomous/github/Dichotomous/AuxFunctions.RData")

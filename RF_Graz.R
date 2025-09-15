@@ -125,21 +125,7 @@ reg.austria <- austria.df %>%
             by = "id")
 #write.csv(reg.austria, "regaustria.csv", row.names = F)
 ##################################################################
-wdp_share <- function(column) {
-    valid_values <- column[!is.na(column)]  # Remove NA values
-    if (length(valid_values) == 0) return(NA)  # Avoid division by zero
-    return(sum(valid_values) / length(valid_values))
-  }
-compute_wdp_shares <- function(df) {  
-  return(c(
-    Theil = wdp_share(df$WDP.Theil),
-    Gini = wdp_share(df$WDP.Gini),
-    Atkinson = wdp_share(df$WDP.Atkinson),
-    SCV = wdp_share(df$WDP.SCV)#,
-#    VAR = wdp_share(df$WDP.VAR) 
-#    MLD = wdp_share(df$WDP.MLD)
-  ))
-}
+
 ## Values for Table 2:
 compute_wdp_shares(ic2res.df)
 
