@@ -33,14 +33,15 @@ extr.France22 <- france22.df %>%
 write.csv(extr.France22, "extrFR22.csv", row.names = F)
 rm(ids.right, ids.left, extr.France22)
 
-
-
 france_long.df <- france22.df %>%
   select(id, starts_with("AV_"), starts_with("EV_"))  %>%
   pivot_longer(cols = starts_with("EV_"), names_to = "Candidate", values_to = "Approval") %>%
   pivot_longer(cols = starts_with("AV_"), names_to = "Approval_Candidate", values_to = "Rating") %>%
-  filter(substring(Candidate, 3) == substring(Approval_Candidate, 3)) #%>%  # Ensure candidate names match 
-#  mutate(Rating = ifelse(Rating ==50, NA, Rating))    ## robustness check: convert 50 to NA
+  filter(substring(Candidate, 3) == substring(Approval_Candidate, 3))   # Ensure candidate names match 
+  
+noise <- sample(seq(-5, 5, 0.01), nrow(france_long.df), replace = T)
+france_long.df <- france_long.df %>%
+  mutate(Rating = Rating + noise)
 
 # Transformation... - apply function
 newratings <- scale_to_range(x = france_long.df$Rating, 2,3)
@@ -96,7 +97,7 @@ compute_wdp_shares(ic2res.df)
 ####################################################################
 ## Bootstrap
 # Custom bootstrapping function
-cluster_bootstrap <- function(df, id_col, R = 1000) {
++cluster_bootstrap <- function(df, id_col, R = 1000) {
   unique_ids <- unique(df[[id_col]])  # Unique id values
   boot_results <- matrix(NA, nrow = R, ncol = 4)  # Store bootstrap results
   

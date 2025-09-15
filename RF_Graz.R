@@ -19,7 +19,7 @@ library(rlang)
 library(readxl)
 #########################################
 # Section 0: Read data and data handling
-austria.df <- read_excel("DATA/Steirische_LTW_2019_Daten_Barbaro.xlsx") %>%
+austria.df <- readxl::read_excel("DATA/Steirische_LTW_2019_Daten_Barbaro.xlsx") %>%
   rename(id = lfdn) %>%
   mutate(Gender = factor(Qb, 
                          levels = c(1, 2, 3), 
