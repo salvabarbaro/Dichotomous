@@ -74,6 +74,12 @@ ex5 <- data.frame(Candidate = LETTERS[1:6],
 
 ta.fun(ex5)
 
+## Example from the theoretical section to explain the bleeding persuasiveness of the threshold approach
+ex.t <- data.frame(Candidate = LETTERS[1:6],
+                  Approv = c(0, 0, 0, 0, 0, 1),
+                  Rating = c(.1, .2, .4, .6, .8, 0.9))
+ta.fun(ex.t)
+##########################################################################################################
 
 ex.list <- list(ex1 = ex1, ex2 = ex2, ex3 = ex3, ex4 = ex4, ex5 = ex5)
 tb1 <- lapply(ex.list, ta.fun) %>% bind_rows(., .id = "Case")

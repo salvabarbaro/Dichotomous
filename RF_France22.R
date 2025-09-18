@@ -33,8 +33,6 @@ extr.France22 <- france22.df %>%
 write.csv(extr.France22, "extrFR22.csv", row.names = F)
 rm(ids.right, ids.left, extr.France22)
 
-
-
 france_long.df <- france22.df %>%
   select(id, starts_with("AV_"), starts_with("EV_"))  %>%
   pivot_longer(cols = starts_with("EV_"), names_to = "Candidate", values_to = "Approval") %>%
