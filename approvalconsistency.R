@@ -41,7 +41,22 @@ threshold_consistency <- function(df) {
   )
 }
 
-threshold_consistency(df = grenoble_theil.df)
+threshold_consistency(df = france_theil.df)
+
+## which id's do have strict threshold consistent preferences
+strict_ids <- function(df) {
+  df %>%
+    group_by(id) %>%
+    filter(any(Approval == 0 & !is.na(Rating)) &
+             any(Approval == 1 & !is.na(Rating))) %>%
+    summarise(cond = max(Rating[Approval == 0], na.rm = TRUE) >
+                      min(Rating[Approval == 1], na.rm = TRUE),
+              .groups = "drop") %>%
+    filter(cond) %>%
+    pull(id)
+}
+
+ids_strict <- strict_ids(france_theil.df)
 
 ###########################################################
 ## bootstrap confidence intervals

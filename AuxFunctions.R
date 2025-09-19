@@ -265,7 +265,7 @@ ic2decomp.fun <- function(i, data) {
     gi.total <- as.numeric(gin$ineq$index)
     gi.within <- as.numeric(gin$decomp$within)
     gi.between <- as.numeric(gin$decomp$between)
-    BM <- decompSGini(x = df$Rating, z = df$Approval, decomp = "BM", ELMO = TRUE)  # YL
+    BM <- decompSGini(x = df$Rating, z = df$Approval, decomp = "BM", ELMO = TRUE)  # BM
     # Compute Atkinson decomposition
     atk <- decompAtkinson(x = df$Rating, z = df$Approval, decomp = "BDA", epsilon = 1)
     atk.total <- as.numeric(atk$ineq$index)

@@ -79,6 +79,65 @@ ex.t <- data.frame(Candidate = LETTERS[1:6],
                   Approv = c(0, 0, 0, 0, 0, 1),
                   Rating = c(.1, .2, .4, .6, .8, 0.9))
 ta.fun(ex.t)
+#
+## Example Ebert 2010
+ex.ue <- data.frame(Candidate = LETTERS[1:4],
+                   Rating = c(10, 20, 15, 15),
+                   Approv = c(0, 0, 1, 1))
+
+ta.fun(ex.ue)
+
+ex.ue1 <- data.frame(Candidate = LETTERS[1:6],
+                   Rating = c(.10, .23, .12, .15, .15, .15),
+                   Approv = c(0, 0, 0, 1, 1, 1))
+ta.fun(ex.ue1)
+
+ex.ue2 <- data.frame(Candidate = LETTERS[1:6],
+                   Rating = c(.14, .14, .17, .15, .15, .15),
+                   Approv = c(0, 0, 0, 1, 1, 1))
+ta.fun(ex.ue2)
+
+due1.YL <- decompSGini(x = ex.ue1$Rating, z = as.factor(ex.ue1$Approv), decomp = "YL")
+## G = 0.137, W = 0.096, B = 0.00
+due1.BM <- decompSGini(x = ex.ue1$Rating, z = as.factor(ex.ue1$Approv), decomp = "BM")
+## G = 0.137, W = 0.048, B = 00, overlap = 0.088
+due1.A <- decompAtkinson(x = ex.ue1$Rating, z = as.factor(ex.ue1$Approv), epsilon = 1, decomp = "BDA")
+## A = 0.0329, W = 0.0329, B = 0
+due1.T <- decompGEI(x = ex.ue1$Rating, z = as.factor(ex.ue1$Approv))
+## T = 0.034, W = 0.0344, B = 0
+#######################################################################################
+due2.YL <- decompSGini(x = ex.ue2$Rating, z = as.factor(ex.ue2$Approv), decomp = "YL")
+## G = 0.033, W = 0.022, B = 0.00
+due2.BM <- decompSGini(x = ex.ue2$Rating, z = as.factor(ex.ue2$Approv), decomp = "BM")
+## G = 0.033, W = 0.011, B = 00, overlap = 0.002
+due2.A <- decompAtkinson(x = ex.ue2$Rating, z = as.factor(ex.ue2$Approv), epsilon = 1, decomp = "BDA")
+## A = 0.0021, W = 0.0021, B = 0
+due2.T <- decompGEI(x = ex.ue2$Rating, z = as.factor(ex.ue2$Approv))
+## T = 0.0021, W = 0.0021, B = 0
+####################################################################################
+## Check the following claim: if the preferences are threshold-dichotomous, then the BM-overlap is zero.
+bmoverl.1 <- data.frame(Candidate = LETTERS[1:6],
+                   Rating = c(.10, .16, .18, .2, .25, .29),
+                   Approv = c(0, 0, 0, 1, 1, 1))
+bm.1 <- decompSGini(x = bmoverl.1$Rating, z = as.factor(bmoverl.1$Approv), decomp = "BM")
+# G = 0.175, W = 0.048, B = 0.127, ### W+B = G
+bmoverl.2 <- data.frame(Candidate = LETTERS[1:6],
+                   Rating = c(.10, .16, .2, .18, .25, .29),
+                   Approv = c(0, 0, 0, 1, 1, 1))
+bm.2 <- decompSGini(x = bmoverl.2$Rating, z = as.factor(bmoverl.2$Approv), decomp = "BM")
+# G = 0.175, W = 0.059, B = 0.11, Overlap = 0.0056, ### W+B = G
+bm.2$decomp$within + bm.2$decomp$between + bm.2$decomp$overlap
+bm.2$ineq
+#
+yl.2 <- decompSGini(x = bmoverl.2$Rating, z = as.factor(bmoverl.2$Approv), decomp = "YL")
+# G = 0.175, W = 0.048, B = 0.127, ### W+B = G
+as.numeric(yl.2$ineq)[1] ## Gini
+yl.2$decomp$within
+yl.2$decomp$between
+yl.2$decomp$stratif
+yl.2$decomp$within + yl.2$decomp$between + yl.2$decomp$stratif
+
+
 ##########################################################################################################
 
 ex.list <- list(ex1 = ex1, ex2 = ex2, ex3 = ex3, ex4 = ex4, ex5 = ex5)

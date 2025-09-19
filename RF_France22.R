@@ -37,8 +37,8 @@ france_long.df <- france22.df %>%
   select(id, starts_with("AV_"), starts_with("EV_"))  %>%
   pivot_longer(cols = starts_with("EV_"), names_to = "Candidate", values_to = "Approval") %>%
   pivot_longer(cols = starts_with("AV_"), names_to = "Approval_Candidate", values_to = "Rating") %>%
-  filter(substring(Candidate, 3) == substring(Approval_Candidate, 3)) #%>%  # Ensure candidate names match 
-#  mutate(Rating = ifelse(Rating ==50, NA, Rating))    ## robustness check: convert 50 to NA
+  filter(substring(Candidate, 3) == substring(Approval_Candidate, 3)) %>%  # Ensure candidate names match 
+  mutate(Rating = ifelse(Rating ==50, NA, Rating))    ## robustness check: convert 50 to NA
 
 # Transformation... - apply function
 newratings <- scale_to_range(x = france_long.df$Rating, 2,3)
