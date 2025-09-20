@@ -7,6 +7,9 @@ nbapprov.df <- france_long.df %>% group_by(id) %>%
           nb.approv = sum(Approval, na.rm = T)   
   ) %>% distinct()
 head(nbapprov.df)
+## Note that napprov.df is a table with id's and the nb of approved data, such that it can be used for
+## different analyses.
+
 france_theil.df <- france_theil.df %>% left_join(x = ., y = nbapprov.df, by = "id")
 #
 df1 <- france_theil.df %>% filter(., nb.approv <3)

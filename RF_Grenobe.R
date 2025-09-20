@@ -129,6 +129,13 @@ working.ids <- grenoble_cluster.df %>%
   filter(., l > 0) 
 kmax.value <- 6  # 5for Graz, 10 for Grenoble
 
+## to restrict analyses on respondents with more than two approved alternatives:
+#nb.approv <- nbapprov.df %>% filter(., nb.approv > 2)
+#working.ids <- working.ids %>% filter(., id %in% nb.approv$id)
+#        2          3          4          5          6 
+# 0.60283688 0.24113475 0.10992908 0.03546099 0.01063830 
+#############################################################################
+
 fv.fun <- function(i, df){
   ro <- df %>% filter(., id %in% i)
   epsilons <- sample(seq(-.1, .1, .001), 6, replace = F)
@@ -188,6 +195,7 @@ table(silh.df$silhouette_category) / nrow(silh.df)
 ## for section 7:
 strong.ids.grenoble <- silh.df$id[silh.df$silhouette_category=="strong"]
 modera.ids.grenoble <- silh.df$id[silh.df$silhouette_category !="weak"]
+
 ### BEGIN FANNY #############################################################
 ### ROBUSTNESS CHECK VIA FANNY
 # First step: find out the optimal cluster number for each respondent

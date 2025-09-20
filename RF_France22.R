@@ -37,8 +37,8 @@ france_long.df <- france22.df %>%
   select(id, starts_with("AV_"), starts_with("EV_"))  %>%
   pivot_longer(cols = starts_with("EV_"), names_to = "Candidate", values_to = "Approval") %>%
   pivot_longer(cols = starts_with("AV_"), names_to = "Approval_Candidate", values_to = "Rating") %>%
-  filter(substring(Candidate, 3) == substring(Approval_Candidate, 3)) %>%  # Ensure candidate names match 
-  mutate(Rating = ifelse(Rating ==50, NA, Rating))    ## robustness check: convert 50 to NA
+  filter(substring(Candidate, 3) == substring(Approval_Candidate, 3)) #%>%  # Ensure candidate names match 
+#  mutate(Rating = ifelse(Rating ==50, NA, Rating))    ## robustness check: convert 50 to NA
 
 # Transformation... - apply function
 newratings <- scale_to_range(x = france_long.df$Rating, 2,3)
@@ -138,7 +138,7 @@ fv.fun <- function(i, df){
   epsilons <- sample(seq(-.1, .1, .001), 6, replace = F)
   rat.temp <- ro$Rating + epsilons
   sc.rat <- scale(rat.temp)
-  silh.values <- fviz_nbclust(sc.rat, kmeans, 
+  silh.values <- fviz_nbclust(sc.rat, kmeans, ## alternative: pam
                               method = "silhouette", 
                               k.max = kmax.value)[["data"]][["y"]]
   df.max <- data.frame(nbcluster = 1:(kmax.value),
@@ -146,6 +146,13 @@ fv.fun <- function(i, df){
   optk <- df.max[,1][which.max(df.max[,2])]
   return(optk)
 }
+
+## to restrict analyses on respondents with more than two approved alternatives:
+#nb.approv <- nbapprov.df %>% filter(., nb.approv > 2)
+#working.ids <- working.ids %>% filter(., id %in% nb.approv$id)
+#          2          3          4          5          6 
+# 0.45193370 0.29060773 0.16685083 0.06298343 0.02762431 France22
+##################################################################################
 
 optclust.list <- mclapply(working.ids$id, fv.fun, 
                           df = france_cluster.df, mc.cores = 8)
@@ -189,6 +196,9 @@ table(silh.df$silhouette_category)
 table(silh.df$silhouette_category) / nrow(silh.df)
 strong.ids.france <- silh.df$id[silh.df$silhouette_category=="strong"]
 modera.ids.france <- silh.df$id[silh.df$silhouette_category !="weak"]
+
+## for further analysis (nb.approved>2, restrict the data on nbapproved)
+
 ### BEGIN FANNY #############################################################
 ### ROBUSTNESS CHECK VIA FANNY
 # First step: find out the optimal cluster number for each respondent
