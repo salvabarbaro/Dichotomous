@@ -78,7 +78,7 @@ write.csv(reg.france, "regfrance.csv", row.names = F)
 compute_wdp_shares(ic2res.df)
 ####################################################################
 ## Bootstrap
-# Custom bootstrapping function
+# Custom bootstrapping function  [clustered BOOTSTRAP, do not confuse with the cluster analysis]
 cluster_bootstrap <- function(df, id_col, R = 1000) {
   unique_ids <- unique(df[[id_col]])  # Unique id values
   boot_results <- matrix(NA, nrow = R, ncol = 4)  # Store bootstrap results
@@ -376,7 +376,6 @@ candmatch.df <- do.call(rbind, lapply(bootstrap_results, as.data.frame))
 candmatch.df
 stargazer::stargazer(candmatch.df, summary = F, rownames = F)
 
-##############################################
 ## Hypothesis: Individuals with \tilde{k}=2 exhibit a higher matching rate than 
 ## individuals with k!= 2. 
 # 1. 

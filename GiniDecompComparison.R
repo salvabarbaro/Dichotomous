@@ -2,7 +2,6 @@ library(dplyr)
 library(IC2)
 library(dineq)
 
-library(dplyr)
 # library(IC2)  # ensure loaded
 
 GiniComparison.fun <- function(i, data) {

@@ -3,7 +3,8 @@ library(dplyr)
 library(texreg)
 library(tidyverse)
 library(modelsummary)
-#library(gtsummary)
+library(estimatr)
+
 ##
 ## Grenoble data
 idsradrightgre <- read.csv("DATA/idsradrightgre.csv", 
@@ -22,7 +23,7 @@ ols01 <- lm(formula = phi.value ~ optk2 + Age +
             data = greno.avg)
 
 summary(ols01)
-modelsummary(ols01)
+modelsummary(ols01, statistic = "[{conf.low}, {conf.high}]")
 #gtsummary::tbl_regression(ols01)
 #texreg::texreg(ols01, single.row = T, label = "tb.ols", booktabs = T,
 #               custom.model.names = "Grenoble")
@@ -37,6 +38,7 @@ ols02 <- lm(formula = phi.value ~ optk2 + Age.num + Gender + Educ.lvl +
               factor(ext.left) + factor(ext.right),
             data = graz.avg)
 summary(ols02)
+modelsummary(ols02, statistic = "[{conf.low}, {conf.high}]")
 #gtsummary::tbl_regression(ols02)
 
 # France22 data
@@ -50,8 +52,9 @@ ols03 <- lm(formula = phi.value ~ optk2 +  Age + Gender + Educ.lvl +
 summary(ols03)
 
 modelsummary(list(ols01, ols02, ols03),
-            stars = TRUE
-          #  estimate = "{estimate}{stars}"
+            stars = TRUE,
+            statistic = "[{conf.low}, {conf.high}]", 
+            coef_map = "optk2k=2+"
           )
 
 
@@ -107,26 +110,38 @@ texreg::texreg(l = ols.list, single.row = T,
                custom.coef.names =  custom.names)
 
 
-
+## In a robustness check, we merged the three datasets to a common one and ran a
+## regression with the survey fixed effects variables. The coefficient is still
+# ## negative in this model specification $(-0.08,  [-0.10; -0.06]$) on a 99\% 
+# ## significance level, whereas no significant effect is present in any of the controls. 
 library(plm)
 model_fe <- plm(mod01, 
                 data = ols.df, 
                 index = "df", 
                 model = "within")  # Fixed effects model
 summary(model_fe)
+lmtest::bptest(model_fe, studentize = TRUE) ## This is important: heteroskadicity is present!
+lmtest::coeftest(model_fe, vcov = vcovHC(model_fe, type = "HC1"))  # HC1 
+modelsummary(model_fe, 
+ # statistic = "{p.value} [{conf.low}, {conf.high}]", 
+  vcov = "HC1")   # here we consider the robust SE in the data presentation
+
 
 model_fe2 <- plm(mod02, 
                 data = ols.df, 
                 index = "df", 
                 model = "within")  # Fixed effects model
 summary(model_fe2)
-gtsummary::tbl_regression(model_fe2, conf.level = 0.95)
-texreg(model_fe2, , single.row = T, 
-       stars = c(0.01),
-                  booktabs = T, use.package = F, 
-                  #               file = "~/Documents/Research/Dichotomous/tbols.tex",
-                  custom.coef.names =  custom.names[-1]
-                  )
+modelsummary(model_fe2)
+
+
+#gtsummary::tbl_regression(model_fe2, conf.level = 0.95)
+#texreg(model_fe2, , single.row = T, 
+#       stars = c(0.01),
+#                  booktabs = T, use.package = F, 
+#                  #               file = "~/Documents/Research/Dichotomous/tbols.tex",
+#                  custom.coef.names =  custom.names[-1]
+#                  )#
 
 
 ###########################################################
