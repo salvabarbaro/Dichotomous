@@ -147,7 +147,7 @@ modelsummary(model_fe2)
 ###########################################################
 ## Section 7 (Soziodemografics)
 ## Graz
-rawdata.graz <- read.csv("regaustria.csv", header = T)
+rawdata.graz <- read.csv("DATA/regaustria.csv", header = T)
 educ.df <- data.frame(Educ = unique(rawdata.graz$Educ),
                       Educ.lvl = c(6, 5, 2, 3, 4, 1, NA))
 age.df <- data.frame(Age = sort(unique(rawdata.graz$Age)),
