@@ -161,22 +161,24 @@ regdata.graz <- rawdata.graz %>%
   left_join(x = ., y = gender.df, by = "Gender") %>%
   left_join(x = ., y = extr.graz, by = "id") %>%
   mutate(Age = Age.num, Gender = Gender.bin) %>%
-  mutate(k2all = ifelse(id %in% modera.ids.graz, 1, 0),  # from RFGraz.R, line 264f
+  mutate(k2all = ifelse(id %in% modera.ids.graz, 1, 0),  # from RFGraz.R, line 243f
          k2strong = ifelse(id %in% strong.ids.graz, 1, 0)) %>%
   select(., c("id", "Gender", "Age", "Educ.lvl", 
               starts_with("WDP."), starts_with("k2"), "ext.right", "ext.left")) 
   
 rm(rawdata.graz, educ.df, age.df, gender.df, extr.graz)
+write.csv(regdata.graz, "DATA/regdataGraz.csv", row.names = F)
+
 
 # Grenoble
-rawdata.grenoble <- read.csv("reggrenoble.csv", header = T) %>% 
+rawdata.grenoble <- read.csv("DATA/reggrenoble.csv", header = T) %>% 
   mutate(Educ.lvl = as.numeric(ifelse(EDUC  == " S", 3, EDUC)))
 age.df <- data.frame(AGE = sort(unique(rawdata.grenoble$AGE)),
                      Age.num = 1:6)
-idsradrightgre <- read.csv("~/Documents/Research/Dichotomous/idsradrightgre.csv", 
+idsradrightgre <- read.csv("DATA/idsradrightgre.csv", 
                            sep="", header = T) 
-idsradleftgre <- read.csv("~/Documents/Research/Dichotomous/idsradleftgre.csv", 
-                          sep="", header = T) 
+idsradleftgre <- read.csv("DATA/idsradleftgre.csv", 
+                           sep="", header = T)  
 regdata.grenoble <- rawdata.grenoble %>% 
   left_join(x = ., y = age.df , by = "AGE") %>%
   select(., c("id", "GENDER", "Age.num", "Educ.lvl", starts_with("WDP."))) %>%
@@ -187,9 +189,9 @@ regdata.grenoble <- rawdata.grenoble %>%
          ext.right = ifelse(id %in% idsradrightgre$x, 1, 0)) %>%
   select(., colnames(regdata.graz))
 rm(rawdata.grenoble, age.df, idsradleftgre, idsradrightgre)
-
+write.csv(regdata.grenoble, "DATA/regdataGrenoble.csv", row.names = F)
 ## France
-rawdata.france <- read.csv("regfrance.csv", header = T) %>%  
+rawdata.france <- read.csv("DATA/regfrance.csv", header = T) %>%  
   mutate(studies = na_if(studies, "nspp")) %>%
   mutate(studies = na_if(studies, "")) %>%
   mutate(Educ.lvl = ifelse(studies == "primaire", 1, ifelse(studies == "secondaire", 2, 3))) %>%
@@ -211,7 +213,7 @@ regdata.france <- rawdata.france %>%
          k2strong = ifelse(id %in% strong.ids.france, 1, 0)) %>%
   select(., colnames(regdata.graz)) 
 rm(rawdata.france, age.df, extr.fr22)
-
+write.csv(regdata.france, "DATA/regdataFrance22.csv", row.names = F)
 ### Regression models
 regfun <- function(m){
   logreg <- glm(formula = get(m) ~ Age + Gender + Educ.lvl,
@@ -220,6 +222,7 @@ regfun <- function(m){
   return(logreg)
 }
 m.list <- as.list(colnames(regdata.france[5:9]))
+m.list <- as.list(colnames(regdata.fran)[5:9])
 reglist.france <- lapply(m.list, regfun)
 
 

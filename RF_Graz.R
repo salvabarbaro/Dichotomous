@@ -117,13 +117,13 @@ ic2res.df <- ic2res %>% do.call(rbind, .) %>%
         )
 head(ic2res.df)
 
-## Store ID's with WDP in reg.austria [for sec 7]
+## Store ID's with WDP in reg.austria [for Secion on Sociodemographics]
 reg.austria <- austria.df %>% 
   select(., c("id", "Gender", "Age", "Educ" )) %>%
   left_join(x = ., 
             y = ic2res.df %>% select(., c("id", "WDP.Theil", "WDP.Gini", "WDP.Atkinson")),
             by = "id")
-#write.csv(reg.austria, "regaustria.csv", row.names = F)
+# write.csv(reg.austria, "DATA/regaustria.csv", row.names = F)
 ##################################################################
 
 ## Values for Table 2:

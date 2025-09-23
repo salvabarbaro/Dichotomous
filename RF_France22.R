@@ -65,13 +65,13 @@ ic2res.df <- ic2res %>% do.call(rbind, .) %>%
 #         WDP.MLD = ifelse(MLD.within < MLD.between, 1, 0)
         )
 #head(ic2res.df)
-## Store ID's with WDP in reg.france [for sec 7]
+## Store ID's with WDP in reg.france [for Section on Socio-Demographics]
 reg.france <- france22.df %>% 
   select(., c("id", "Gender", "Age", "studies")) %>%
   left_join(x = ., 
             y = ic2res.df %>% select(., c("id", "WDP.Theil", "WDP.Gini", "WDP.Atkinson")),
             by = "id")
-write.csv(reg.france, "regfrance.csv", row.names = F)
+#write.csv(reg.france, "DATA/regfrance.csv", row.names = F)
 
 
 ## Values for Table 2:

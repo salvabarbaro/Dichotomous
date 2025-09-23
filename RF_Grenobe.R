@@ -69,7 +69,7 @@ reg.grenoble <- grenoble.df %>%
   left_join(x = ., 
             y = ic2res.df %>% select(., c("id", "WDP.Theil", "WDP.Gini", "WDP.Atkinson")),
             by = "id")
-#write.csv(reg.grenoble, "reggrenoble.csv", row.names = F)
+write.csv(reg.grenoble, "DATA/reggrenoble.csv", row.names = F)
 
 ## Values for Table 2:
 compute_wdp_shares(ic2res.df)
@@ -127,7 +127,7 @@ working.ids <- grenoble_cluster.df %>%
   group_by(id) %>% 
   reframe(l = var(Rating, na.rm = T)) %>%
   filter(., l > 0) 
-kmax.value <- 6  # 5for Graz, 10 for Grenoble
+kmax.value <- 6  # 5for Graz, 6 for Grenoble
 
 ## to restrict analyses on respondents with more than two approved alternatives:
 #nb.approv <- nbapprov.df %>% filter(., nb.approv > 2)
@@ -151,7 +151,7 @@ fv.fun <- function(i, df){
 }
 
 optclust.list <- mclapply(working.ids$id, fv.fun, 
-                          df = grenoble_cluster.df, mc.cores = 14)
+                          df = grenoble_cluster.df, mc.cores = 8)
 
 optclust.df <- data.frame(id = working.ids$id, 
                           optk = unlist(optclust.list))
