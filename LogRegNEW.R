@@ -21,14 +21,108 @@ logregdata.df <- rbind(regdata.gren %>% mutate(df = "Grenoble"),
                        regdata.graz %>% mutate(df = "Graz"), 
                        regdata.fran %>% mutate(df = "France22"))
 #######################################################################################
-logregmod.WDP <- "WDP.Gini ~ Age + Gender + Educ.lvl + factor(df)"
-logregmod.WDP <- "k2strong ~ Age + Gender + Educ.lvl + factor(df)"
+# models
+logregmod.WDP <- "WDP.Gini ~ Age + Gender + Educ.lvl"
+logregmod.k2 <- "k2strong ~ Age + Gender + Educ.lvl"
 logregmod.RC1  <- "WDP.Gini ~ Age + Gender + Educ.lvl + ext.right + ext.left"
-logreg.main   <- glm(formula = logregmod.WDP, 
-                      family = "binomial", 
-                      data = logregdata.df)
-modelsummary(logreg.main, exponentiate = T,
-              statistic = "[{conf.low}, {conf.high}]")
+logregmod.k2R <- "k2strong ~ Age + Gender + Educ.lvl + ext.right + ext.left"
+# Regressions
+logreg.WDP.Gren <- glm(formula = logregmod.WDP, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "Grenoble"))
+#
+logreg.WDP.Gra <- glm(formula = logregmod.WDP, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "Graz"))
+#
+logreg.WDP.Fra <- glm(formula = logregmod.WDP, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "France22"))
+#
+logreg.RC1.Gren <- glm(formula = logregmod.RC1, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "Grenoble"))
+#
+logreg.RC1.Gra <- glm(formula = logregmod.RC1, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "Graz"))
+#
+logreg.RC1.Fra <- glm(formula = logregmod.RC1, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "France22"))
+#
+logreg.k2.Gren <- glm(formula = logregmod.k2, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "Grenoble"))
+#
+logreg.k2.Gra <- glm(formula = logregmod.k2, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "Graz"))
+#
+logreg.k2.Fra <- glm(formula = logregmod.k2, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "France22"))
+#
+logreg.k2R.Gren <- glm(formula = logregmod.k2R, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "Grenoble"))
+#
+logreg.k2R.Gra <- glm(formula = logregmod.k2R, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "Graz"))
+#
+logreg.k2R.Fra <- glm(formula = logregmod.k2R, 
+                       family = "binomial", 
+                       data = logregdata.df %>% filter(., df == "France22"))
+##################################################################################
+
+
+## Results
+mods <- list(logreg.WDP.Gren, logreg.WDP.Gra, logreg.WDP.Fra,
+             logreg.RC1.Gren, logreg.RC1.Gra, logreg.RC1.Fra,
+             logreg.k2.Gren, logreg.k2.Gra, logreg.k2.Fra,
+             logreg.k2R.Gren, logreg.k2R.Gra, logreg.k2R.Fra)
+
+mods <- list("WDP.Main - Grenoble" =logreg.WDP.Gren, 
+             "WDP.Main - Graz" = logreg.WDP.Gra, 
+             "WDP.Main - France22" = logreg.WDP.Fra,
+             "WDP.Extr - Grenoble" = logreg.RC1.Gren, 
+             "WDP.Extr - Graz" = logreg.RC1.Gra, 
+             "WDP.Extr - France22" =logreg.RC1.Fra,
+             "K2.Main - Grenoble" = logreg.k2.Gren, 
+             "K2.Main - Graz" =logreg.k2.Gra, 
+             "K2.Main - France22" =logreg.k2.Fra,
+             "K2.Extr - Grenoble" = logreg.k2R.Gren, 
+             "K2.Extr - Graz" =logreg.k2R.Gra, 
+             "K2.Extr - France22" =logreg.k2R.Fra)
+
+
+modelsummary(mods, 
+            exponentiate = T,
+             statistic = "[{conf.low}, {conf.high}]",
+            stars = T)
+
+modelplot(mods[1:6], 
+          exponentiate = T, 
+          coef_map   = c("Educ.lvl" = "Educ. lvl."),  
+          conf_level = 0.9) + 
+  geom_vline(xintercept = 1, col = "black") +
+  coord_flip() + theme_gray(base_size = 22)
+
+
+
+
+## Nächste Schritte: Neue Variable für Anzahl bewerteter und Anzahl approved candidate.
+## K2 auf den CSES-Datensatz anwenden. 
+
+
+
+
+
+
+
+
+
 
 
 
