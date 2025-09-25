@@ -1,4 +1,3 @@
-#library(purrr)
 library(dplyr)
 library(cluster)
 library(factoextra)
@@ -10,11 +9,37 @@ library(IC2)
 library(parallel)
 library(scales)
 library(latex2exp)
+library(haven)
 
 ## Cluster analyses on CSES data
 setwd("~/Documents/Research/Dichotomous/github/Dichotomous/DATA/")
 # 1. Load data
+cses_imd <- haven::read_dta("~/Documents/Research/Dichotomous/Data/cses_imd_stata/cses_imd.dta")
+cses.df <- cses_imd %>%
+  mutate(C.ID = IMD1005,
+         C.Age = IMD2001_1,
+         C.Gender = IMD2002,
+         C.Education = IMD2003,
+         C.Income = IMD2006,
+         C.SocEconStatus = IMD2016,
+         C.Ideology = IMD3006,
+         C.SatisfDem = IMD3010) %>%
+  dplyr::select(starts_with("C.")) %>%
+  mutate(
+    Age = ifelse(C.Age > 99, NA, as.numeric(C.Age)),
+    Gender = factor(case_when(
+      C.Gender == 1 ~ "M",
+      C.Gender == 2 ~ "F",
+      TRUE ~ NA_character_  )),
+    Education = ifelse(C.Education > 4, NA, as.factor(C.Education) ),
+    Income = ifelse(C.Income > 5, NA, as.factor(C.Income)),
+    Ideology =  ifelse(C.Ideology > 10, NA, C.Ideology),
+    Dissatisfaction = ifelse(C.SatisfDem >5, NA, as.factor(C.SatisfDem))
+  )
+
 #load("~/Documents/Research/Elections/AnnaProjects/CondorcetParadox/Data/cses_imd.rdata")
+# Codebook:
+#https://cses.org/wp-content/uploads/2024/02/cses_imd_codebook_part2_variables.txt
 cses <- read.csv("cses.csv", header = T)
 ## Approach: we consider only individuals who rated at least six parties.
 ## Given this restriction, we consider only elections with at least 100 individuals
