@@ -187,7 +187,7 @@ mod02 <- "bin.k2 ~ Age + Gender + Education  | case_ID"
 mod03 <- "bin.k2 ~ Education + Ideology  | case_ID"
 mod04 <- "bin.k2 ~ Education + Ideology + Satisfaction.Dem  | case_ID"
 mod05 <- "bin.k2 ~ Education + Satisfaction.Dem  | case_ID"
-mod06 <- "bin.k2 ~ Education + Ideology  | case_ID"
+mod06 <- "bin.k2 ~ Education  | case_ID"
 
 
 felogreg.fun <- function(m){
@@ -199,6 +199,7 @@ felogreg.fun <- function(m){
 }
 
 mods <- list(mod01, mod02, mod03, mod04, mod05, mod06)
+mods <- list(mod06, mod05, mod03, mod02, mod04, mod01)
 logregs <- lapply(mods, felogreg.fun)
 
 modelsummary(logregs, 
@@ -209,6 +210,80 @@ modelsummary(logregs,
   vcov = "HC1",
   conf_level = 0.95)
 
+options("modelsummary_format_numeric_latex" = "plain")
+modelsummary(
+  logregs, 
+  exponentiate = TRUE, 
+  stars = TRUE, 
+  statistic = "[{conf.low}, {conf.high}]",
+  gof_map   = c("nobs", "aic", "bic"),
+  vcov = "HC1",
+  conf_level = 0.95,
+  output = "latex",
+  booktabs = TRUE,
+  file = "~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/csesLogReg.tex"
+)
+
+#### Dichotomous preferences and Ideology.
+cses.sat <- cses.df %>% dplyr::select(., c(bin.k2, Ideology, Satisfaction.Dem))
+ideo.df <- cses.sat %>% group_by(Ideology) %>% reframe(DP =mean(bin.k2, na.rm = T))
+sati.df <- cses.sat %>% group_by(Satisfaction.Dem) %>% reframe(DP =mean(bin.k2, na.rm = T))
+cses.sat <- cses.df %>%
+  rowwise() %>%
+  mutate(
+    count_0_10 = sum(c_across(starts_with("party_rating")) %in% c(0, 10), na.rm = TRUE),
+    count_NA   = sum(is.na(c_across(starts_with("party_rating"))))
+  ) %>%
+  ungroup()
+cses.sat %>% group_by(Satisfaction.Dem) %>%
+  reframe(ext = mean(count_0_10, na.rm = T),
+          na  = mean(count_NA,   na.rm = T)
+          )
+
+glm.ideology <- feglm(fml = bin.k2 ~ Ideology, family = binomial(link = "logit"),
+  data   = cses.df)
+modelsummary(glm.ideology, 
+  exponentiate = T, 
+  stars = T, 
+  statistic = "[{conf.low}, {conf.high}]",
+  gof_map   = c("nobs", "aic", "bic"),
+  vcov = "HC1",
+  conf_level = 0.95)
+
+cses.dist <- cses.df %>%
+  mutate(Dist0 = abs(Ideology - 5)) %>%
+  mutate(DistSq = Dist0^2)
+
+modD1 <- "bin.k2 ~ Age + Gender + Education + IncomeQ + Dist0 + Satisfaction.Dem | case_ID"
+modD2 <- "bin.k2 ~ Age + Gender + Education + DistSq  | case_ID"
+modD3 <- "bin.k2 ~ Education + Dist0  | case_ID"
+modD4 <- "bin.k2 ~ Education + Dist0 + Satisfaction.Dem  | case_ID"
+modD5 <- "bin.k2 ~ Education + Satisfaction.Dem + DistSq  | case_ID"
+modD6 <- "bin.k2 ~ Education + Dist0  | case_ID"
+
+feDist.fun <- function(m){
+  feglm(
+ fml = as.formula(m),
+  family = binomial(link = "logit"),
+  data   = cses.dist
+)
+}
+
+distmod <- list(modD6, modD3, modD5, modD4, modD2, modD1)
+
+DistReg <- lapply(distmod, feDist.fun)
+
+modelsummary(DistReg, 
+  exponentiate = T, 
+  stars = T, 
+  statistic = "[{conf.low}, {conf.high}]",
+  gof_map   = c("nobs", "aic", "bic"),
+  vcov = "HC1",
+  conf_level = 0.95)
+
+cses.dist %>% group_by(Satisfaction.Dem) %>%
+  reframe(mnDist = mean(Dist0, na.rm = T),
+          mn.DSq = mean(DistSq, na.rm = T))
 
 
 

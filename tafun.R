@@ -142,3 +142,31 @@ gini_decomp <- decompSGini(x = ex1$Rating, z = factor(ex1$Approv), decomp = "YL"
 gini_within + gini_between
 gini_within
 gini_between
+
+
+############################
+#Theil-T
+exB <- data.frame(Candidate = LETTERS[1:6],
+                  Approv = c(0, 0, 0, 1, 1, 1),
+                  Rating = c(130, 140, 135, 170, 180, 190))
+
+
+theil.fun <- function(df){
+  df <- df %>% mutate(Approv = as.factor(Approv))
+  dec <- decompGEI(x = df$Rating, z = df$Approv, alpha = 1, ELMO = FALSE)
+  th.total <- as.numeric(dec$ineq$index)
+  th.within <- as.numeric(dec$decomp$within)
+  th.between <- as.numeric(dec$decomp$between)
+  return(c(th.total, th.within, th.between))
+}
+theil.fun(exB)
+
+mean(exB$Rating)
+
+helpfun<- function(v){
+  ka = v/157.5 * log(v/157.5)
+  return(ka)
+}
+
+
+decB <- decompGEI(x = exB$Rating, z = as.factor(exB$Approv), alpha = 1, ELMO = F)
