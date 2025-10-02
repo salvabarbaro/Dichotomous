@@ -1,6 +1,7 @@
 #########################################################################
-### Supplementary analyses to Section 4 (Inequality-Measure Approach)
+### Supplementary analyses to Section 5 (Weakly Dichotomous Preferences)
 ### We analyse how the share of individuals drops depending on the number of approved candidates
+### Here: we generate nbapproved.pdf (Fig. 3)
 # 1. France22
 nbapprov.df <- france_long.df %>% group_by(id) %>%
   reframe(id = id, 

@@ -170,3 +170,46 @@ helpfun<- function(v){
 
 
 decB <- decompGEI(x = exB$Rating, z = as.factor(exB$Approv), alpha = 1, ELMO = F)
+
+
+#############################
+## Atkinson-Index, epsilon = 1
+atk_decomp <- function(df, value_col = "Rating", group_col = "Approv") {
+  x <- df[[value_col]]
+  g <- df[[group_col]]
+  m <- length(x)
+  
+  mu <- mean(x)
+  gmean <- exp(mean(log(x)))
+  atk_total <- 1 - gmean / mu
+  
+  # Group-level stats
+  groups <- split(x, g)
+  mu_g <- sapply(groups, mean)
+  gmean_g <- sapply(groups, function(v) exp(mean(log(v))))
+  m_g <- sapply(groups, length)
+  
+  # weights
+  s_g <- (m_g * mu_g) / (m * mu)
+  
+  # subgroup Atkinson
+  atk_g <- 1 - gmean_g / mu_g
+  
+  # within and between
+  atk_within <- sum(s_g * atk_g)
+  atk_between <- sum(s_g * (gmean_g / mu_g)) - (gmean / mu)
+  
+  list(
+    total   = atk_total,
+    within  = atk_within,
+    between = atk_between,
+    check   = atk_within + atk_between
+  )
+}
+atk_decomp(df = exB)
+
+
+atk <- decompAtkinson(x = exB$Rating, z = as.factor(exB$Approv), decomp = "BDA", epsilon = 1) 
+as.numeric(atk$ineq$index) # total
+as.numeric(atk$decomp$within) # within
+as.numeric(atk$decomp$between) # between
