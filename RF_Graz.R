@@ -102,7 +102,7 @@ austria_cluster.df <- austria_theil.df %>%
   group_by(id) %>%
   filter(all(!is.na(Rating))) %>%
   ungroup()
-
+###
 #############################################################
 ### Section 3: Decomposition analysis
 # Running the function using lapply, removing NULL results
