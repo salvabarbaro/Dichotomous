@@ -110,3 +110,8 @@ If you use this code or data, please cite the paper:
 
 This project is licensed under the **Creative Commons Attribution (CC-BY)** license.  
 You are free to share and adapt the material, provided appropriate credit is given.
+
+## Acknowledgements
+
+The data from the Graz experiment were provided by **Andreas Klamler (University of Graz)** and are published in this repository with his kind permission.  
+The authors are grateful to Andreas Klamler for his generous support.
