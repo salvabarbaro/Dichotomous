@@ -4,7 +4,7 @@ This repository contains the replication files accompanying the paper
 **"Dichotomous Preferences: Concepts, Measurement, and Evidence"**  
 by [Salvatore Barbaro](mailto:sbarbaro@uni-mainz.de) and [Anna-Sophie Kurella](mailto:a.kurella@ipw.uni-hannover.de).
 
-📄 Link to the paper: *[to be inserted]*
+📄 Link to the paper: [IPP Discussion Paper 2506 (2025)](https://download.uni-mainz.de/RePEc/pdf/Discussion_Paper_2506.pdf)
 
 ---
 
@@ -102,7 +102,7 @@ library(rlang)
 
 If you use this code or data, please cite the paper:
 
-*Barbaro, S., & Kurella, A.-S. (2025). Dichotomous Preferences: Concepts, Measurement, and Evidence. [link to be inserted]*
+*Barbaro, S., & Kurella, A.-S. (2025). Dichotomous Preferences: Concepts, Measurement, and Evidence. [IPP Discussion Paper 2506 (2025)](https://download.uni-mainz.de/RePEc/pdf/Discussion_Paper_2506.pdf)*
 
 ---
 
