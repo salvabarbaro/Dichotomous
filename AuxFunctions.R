@@ -9,7 +9,7 @@
 # 6. ic2decomp.fun calculates the four different decompositions shown in Fig 3 of the paper
 # 7. Function to calculate the respective share of respondents with WDP
 ########################################################################################################
-# 1. 
+# 1.## 
 # Decompose by squared coefficient of variation (SCV = Var / mu^2)
 # using the Bhattacharya–Mahalanobis variance decomposition.
 # income = column name with incomes (e.g., "Rating")
