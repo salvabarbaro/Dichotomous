@@ -12,9 +12,9 @@ library(latex2exp)
 library(haven)
 
 ## Cluster analyses on CSES data
-setwd("~/Documents/Research/Dichotomous/github/Dichotomous/DATA/")
+#setwd("~/Documents/Research/Dichotomous/github/Dichotomous/DATA/")
 # 1. Load data
-cses_imd <- haven::read_dta("~/Documents/Research/Dichotomous/Data/cses_imd_stata/cses_imd.dta")
+cses_imd <- haven::read_dta("DATA/cses_imd.dta")
 cses.df <- cses_imd %>%
   mutate(C.ID = IMD1005,
          C.Age = IMD2001_1,
@@ -40,7 +40,7 @@ cses.df <- cses_imd %>%
 #load("~/Documents/Research/Elections/AnnaProjects/CondorcetParadox/Data/cses_imd.rdata")
 # Codebook:
 #https://cses.org/wp-content/uploads/2024/02/cses_imd_codebook_part2_variables.txt
-cses <- read.csv("cses.csv", header = T)
+cses <- read.csv("DATA/cses.csv", header = T)
 ## Approach: we consider only individuals who rated at least six parties.
 ## Given this restriction, we consider only elections with at least 100 individuals
 ## This effectively removes case_IDs with only few parties considered. 
@@ -137,9 +137,11 @@ summary_tables <- bind_rows(res.list) %>%
     k_4_pct = round(100 * k_4 / total_k234, 1)
   )
 
-write.csv(summary_tables, "csesSummary.csv", row.names = F)
+write.csv(summary_tables, "DATA/csesSummary.csv", row.names = F)
 
-summary_tables <- read.csv("csesSummary.csv", header = T)
+summary_tables <- read.csv("DATA/csesSummary.csv", header = T)
+res <- summary_tables
+
 sapply(res[,6:8], mean)
 
 res_long <- res %>%
@@ -162,38 +164,10 @@ p1 <- ggplot(res_long, aes(x = k_type, y = percent)) +
     "k4" = TeX("$\\tilde{k}=4$")
   )) +
   labs(x = NULL, y = "Percentage") +
-  theme_minimal(base_size = 22) +
+  theme_minimal(base_size = 24) +
   theme(legend.position = "none")
-ggsave("~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/cses.pdf", plot = p1, width = 16, height = 9)
+ggsave("cses169.pdf", plot = p1, width = 16, height = 8)
 
 
 
 ###########################################################
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
