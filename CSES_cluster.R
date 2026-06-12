@@ -116,7 +116,7 @@ case_ids <- unique(cs_p.df$case_ID)
 # Use lapply to get list of data frames
 res.list <- mclapply(case_ids, function(case_id) {
   fv.per.id(case_id, cs_p.df, kmax.value = kmax)
-}, mc.cores = 8)
+}, mc.cores = 16)
 
 # Bind into one data frame
 summary_tables <- dplyr::bind_rows(res.list)

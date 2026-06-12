@@ -1,5 +1,3 @@
-setwd("~/Documents/Research/Dichotomous/github/Dichotomous")
-
 #########################################
 library(dplyr)
 library(cluster)
@@ -259,7 +257,7 @@ famemb.fun <- function(i){
 }
 
 famemb.list <- lapply(unique(working.ids$id), FUN=famemb.fun)
-unlist(famemb.list) / 11
+#unlist(famemb.list) / 11
 famemb.grenoble <- data.frame(id = working.ids$id,
                           mmsh.value = unlist(famemb.list),
                           mmsh.share = unlist(famemb.list) / 11) %>%
@@ -316,6 +314,26 @@ greno.df <- cbind(grenoble_cluster.df %>%
   mutate(GENDER = na_if(GENDER, " NSPP"),
          EDUC =   na_if(EDUC,   " NSPP")) %>%
   mutate(Educ.lvl = as.numeric(ifelse(EDUC  == " S", 3, EDUC)))
+
+## for presentation purpose: show two respondents
+greno.id2 <- greno.df %>% filter(, id == 2) %>%
+  dplyr::select(., c("Candidate", "Rating", "Approval", "clus.assing", "match")) %>%
+  setNames(c("Candidates", "Rating", "Approved", "Approval Cluster", "Match")) %>%
+  mutate(Candidate = c("Dupon-Aignan", "Le Pen", "Macron", "Hamon", "Arthaud", 
+                       "Poutou", "Cheminade", "Lasalle", "Mèlenchon", "Asselineau", "Fillon"), 
+                      .before=Candidates) %>%
+  dplyr::select(., -c("Candidates"))
+stargazer::stargazer(greno.id2, summary = F, rownames = F)
+
+greno.id5 <- greno.df %>% filter(, id == 5) %>%
+  dplyr::select(., c("Candidate", "Rating", "Approval", "clus.assing", "match")) %>%
+  setNames(c("Candidates", "Rating", "Approved", "Approval Cluster", "Match")) %>%
+  mutate(Candidate = c("Dupon-Aignan", "Le Pen", "Macron", "Hamon", "Arthaud", 
+                       "Poutou", "Cheminade", "Lasalle", "Mèlenchon", "Asselineau", "Fillon"), 
+                      .before=Candidates) %>%
+  dplyr::select(., -c("Candidates"))
+stargazer::stargazer(greno.id5, summary = F, rownames = F)
+
 
 ## A. Similarities: how many parties are identical?
 sum(greno.df$match[is.na(greno.df$match) == F]) / 

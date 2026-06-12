@@ -1,13 +1,12 @@
-setwd("~/Documents/Research/Dichotomous/github/Dichotomous/DATA/")
 #
-library(dplyr)
+#library(dplyr)
 library(cluster)
 library(factoextra)
 library(ggplot2)
-library(ineq)
+#library(ineq)
 library(rstatix)
-library(tidyr)
-library(IC2)
+#library(tidyr)
+#library(IC2)
 library(parallel)
 library(scales)
 library(latex2exp)
@@ -17,7 +16,7 @@ library(modelsummary)
 library(fixest)
 
 
-cses <- read_dta("cses_imd.dta")
+cses <- read_dta("DATA/cses_imd.dta")
 ##
 cses.df <- cses %>%
   mutate(
@@ -149,8 +148,10 @@ rating_list <- cses.df %>%
     )
   })
 
-ncores <- 12
+ncores <- 16
 
+
+## takes about 15 min! read the file directly
 optk_list <- mclapply(
   rating_list,
   function(x) {
@@ -164,6 +165,10 @@ optk_list <- mclapply(
 )
 
 optk_df <- bind_rows(optk_list)
+
+## easy access to optk_df: 
+optk_df <- readRDS("DATA/optkdf.RDS")
+
 
 # join back to original data
 cses.df <- cses.df %>%
@@ -189,6 +194,15 @@ mod04 <- "bin.k2 ~ Education + Ideology + Satisfaction.Dem  | case_ID"
 mod05 <- "bin.k2 ~ Education + Satisfaction.Dem  | case_ID"
 mod06 <- "bin.k2 ~ Education  | case_ID"
 
+### models with Democracy Satisfaction as main variable
+mod01 <- "bin.k2 ~ Age + Gender + Education + IncomeQ + Ideology + Satisfaction.Dem | case_ID"
+mod02 <- "bin.k2 ~ Age + Gender + Satisfaction.Dem  | case_ID"
+mod03 <- "bin.k2 ~ Satisfaction.Dem + Ideology  | case_ID"
+mod04 <- "bin.k2 ~ Education + Ideology + Satisfaction.Dem  | case_ID"
+mod05 <- "bin.k2 ~ Education + Satisfaction.Dem  | case_ID"
+mod06 <- "bin.k2 ~ Satisfaction.Dem  | case_ID"
+
+
 
 felogreg.fun <- function(m){
   feglm(
@@ -205,9 +219,10 @@ logregs <- lapply(mods, felogreg.fun)
 modelsummary(logregs, 
   exponentiate = T, 
   stars = T, 
-  statistic = "[{conf.low}, {conf.high}]",
-  gof_map   = c("nobs", "aic", "bic"),
-  vcov = "HC1",
+  statistic = '[{conf.low}, {conf.high}]',
+  gof_omit = "R2|RMSE",
+#  gof_map   = c("nobs", "aic", "bic"),
+  vcov = "HC2",
   conf_level = 0.95)
 
 options("modelsummary_format_numeric_latex" = "plain")
@@ -240,6 +255,9 @@ cses.sat %>% group_by(Satisfaction.Dem) %>%
           na  = mean(count_NA,   na.rm = T)
           )
 
+write_rds(cses.sat, file = "DATA/csesDemSat.RDS")
+cses.sat <- readRDS("DATA/csesDemSat.RDS")
+
 glm.ideology <- feglm(fml = bin.k2 ~ Ideology, family = binomial(link = "logit"),
   data   = cses.df)
 modelsummary(glm.ideology, 
@@ -261,6 +279,16 @@ modD4 <- "bin.k2 ~ Education + Dist0 + Satisfaction.Dem  | case_ID"
 modD5 <- "bin.k2 ~ Education + Satisfaction.Dem + DistSq  | case_ID"
 modD6 <- "bin.k2 ~ Education + Dist0  | case_ID"
 
+### models with Democracy Satisfaction as main variable
+mod01 <- "bin.k2 ~ Age + Gender + Education + IncomeQ + Dist0 + Satisfaction.Dem | case_ID"
+mod02 <- "bin.k2 ~ Age + Gender + Satisfaction.Dem + Dist0  | case_ID"
+mod03 <- "bin.k2 ~ Satisfaction.Dem + Dist0  | case_ID"
+mod04 <- "bin.k2 ~ Education + Dist0 + Satisfaction.Dem  | case_ID"
+mod05 <- "bin.k2 ~ Education + Satisfaction.Dem + IncomeQ  | case_ID"
+mod06 <- "bin.k2 ~ Satisfaction.Dem  | case_ID"
+
+
+
 feDist.fun <- function(m){
   feglm(
  fml = as.formula(m),
@@ -270,8 +298,12 @@ feDist.fun <- function(m){
 }
 
 distmod <- list(modD6, modD3, modD5, modD4, modD2, modD1)
+distmod2 <- list(mod01, mod02, mod03, mod04, mod05, mod06)
 
-DistReg <- lapply(distmod, feDist.fun)
+
+DistReg <- lapply(distmod2, feDist.fun)
+
+
 
 modelsummary(DistReg, 
   exponentiate = T, 
@@ -279,7 +311,27 @@ modelsummary(DistReg,
   statistic = "[{conf.low}, {conf.high}]",
   gof_map   = c("nobs", "aic", "bic"),
   vcov = "HC1",
-  conf_level = 0.95)
+  conf_level = 0.95,
+  output = "latex",
+  booktabs = TRUE,
+  file = "~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/csesDistReg.tex"
+)
+
+modelplot(
+  DistReg, 
+  exponentiate = T, 
+  vcov = "HC1", 
+  conf_level = 0.95,
+  coef_rename = c(
+    "Dist0" = "Ideol. Distance", 
+    "IncomeQ" = "Income",
+    "GenderM" = "Male")
+) + theme_bw(base_size = 24) + geom_vline(xintercept = 1, linetype = "dashed") +
+  scale_color_viridis_d()
+ggsave("RegressionPlots.pdf", width = 16, height = 8)
+
+
+
 
 cses.dist %>% group_by(Satisfaction.Dem) %>%
   reframe(mnDist = mean(Dist0, na.rm = T),

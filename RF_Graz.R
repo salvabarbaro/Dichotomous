@@ -1,6 +1,6 @@
 ### Graz Dataset
 ### I. Read Data and prepare data
-setwd("~/Documents/Research/Dichotomous/github/Dichotomous")
+#setwd("~/Documents/Research/Dichotomous/github/Dichotomous")
 
 #########################################
 library(dplyr)
@@ -62,7 +62,7 @@ extr.df <- austria.df %>%
   mutate(ext.right = ifelse(Rat.FPÖ > 17.5, 1, 0),
          ext.left =  ifelse(Rat.KPÖ > 17.5, 1, 0)) %>%
   select(., c("id", "ext.left", "ext.right"))
-write.csv(extr.df, "extrGraz.csv", row.names = F)
+write.csv(extr.df, "DATA/extrGraz.csv", row.names = F)
 rm(extr.df)
 # Data frame for Theil analysis
 austria_long.df <- austria.df %>%
@@ -203,7 +203,7 @@ optclust.list <- mclapply(working.ids$id, fv.fun,
 optclust.df <- data.frame(id = working.ids$id, 
                           optk = unlist(optclust.list))
 ## Data for the Table in Section 4
-table(optclust.df$optk) / nrow(optclust.df)
+prop.table(table(optclust.df$optk))
 
 
 ## Second Approach: Select the id's with kopt == 2 and check the silhouette scores
