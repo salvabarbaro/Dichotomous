@@ -2,10 +2,10 @@ library(dplyr)
 library(cluster)
 library(factoextra)
 library(ggplot2)
-library(ineq)
+#library(ineq)
 library(rstatix)
 library(tidyr)
-library(IC2)
+#library(IC2)
 library(parallel)
 library(scales)
 library(latex2exp)
@@ -143,6 +143,15 @@ summary_tables <- read.csv("DATA/csesSummary.csv", header = T)
 res <- summary_tables
 
 sapply(res[,6:8], mean)
+
+## table for case studies
+cou.selection <- c("France_2012", "Germany_2021", "Great Britain_2019", "Israel_2020", "Japan_2017", "Tunisia_2019")
+
+cou.table <- res %>% filter(., case_ID %in% cou.selection) %>%
+  dplyr::select(., c("case_ID", "k_2_pct", "k_3_pct", "k_4_pct")) 
+stargazer::stargazer(cou.table, summary = F)
+
+
 
 res_long <- res %>%
   pivot_longer(cols = ends_with("pct"),

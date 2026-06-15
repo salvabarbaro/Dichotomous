@@ -3,11 +3,11 @@ library(dplyr)
 library(cluster)
 library(factoextra)
 library(ggplot2)
-library(ineq)
-library(dineq)
+#library(ineq)
+#library(dineq)
 library(rstatix)
 library(tidyr)
-library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
+#library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
 library(parallel)
 library(gtsummary)
 library(modelsummary)
@@ -482,3 +482,30 @@ logreg04 <- glmer(match ~ Gender +
                     (1 | Party), 
                   family = binomial, data = graz.df)
 gtsummary::tbl_regression(logreg04, exponentiate = T)
+
+
+#################################################################################################
+### assessing the threshold approach
+
+## single:
+df <- grenoble_cluster.df %>% filter(., id == 2)
+min.D2 <- min(df$Rating[df$Approval == 1], na.rm = T)
+max.D2 <- max(df$Rating[df$Approval == 0], na.rm = T)
+cond.D2.weak <- ifelse(min.D2 >= max.D2, 1, 0)
+cond.D2.strong <- ifelse(min.D2 > max.D2, 1, 0)
+
+#c(min.D2, max.D2)
+
+threshold.fun <- function(i){
+  df <- grenoble_cluster.df %>% filter(., id == i)
+  min.app <- min(df$Rating[df$Approval == 1], na.rm = T)
+  max.dis <- max(df$Rating[df$Approval == 0], na.rm = T)
+  cond.weak <-   ifelse(min.app >= max.dis, 1, 0)
+  cond.strong <- ifelse(min.app >  max.dis, 1, 0)
+  return(c(cond.weak, cond.strong))  
+}
+
+threshold.list <- lapply(unique(grenoble_cluster.df$id), threshold.fun) %>% do.call(rbind, .) %>%
+  as.data.frame(.) %>% setNames(c("Weak", "Strong"))
+sapply(threshold.list, sum) / nrow(threshold.list)
+
