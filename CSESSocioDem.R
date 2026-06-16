@@ -36,7 +36,7 @@ cses.df <- cses %>%
     Education = ifelse(C.Education > 4, NA, as.factor(C.Education)),
     IncomeQ = ifelse(C.Income > 5, NA, as.factor(C.Income)),
     Ideology = ifelse(C.Ideology > 10, NA, as.numeric(C.Ideology)),
-    Satisfaction.Dem = case_when(
+    Satisfaction.Dem = case_when(                      ### Important: we actually measure satisfaction
       C.DissatDem == 5 ~ 1,
       C.DissatDem == 4 ~ 2,
       C.DissatDem == 6 ~ 3,
@@ -53,8 +53,19 @@ cses.df <- cses %>%
       starts_with("IMD3008_"),
       ~ ifelse(.x < 11, .x, NA),
       .names = "party_rating_{tolower(sub('IMD3008_', '', .col))}"
-    ))
+    )) %>%
+  mutate(Dist0 = abs(Ideology - 5)) %>%
+  mutate(DistSq = Dist0^2) 
 
+optk_df <- readRDS("DATA/optkdf.RDS")
+
+# join back to original data
+cses.all <- cses.df %>%
+  left_join(optk_df, by = c("ID", "case_ID")) %>% 
+  mutate(bin.k2 = ifelse(opt_k == 2, 1, 0))   # bin.k2 : LHS or the regressions
+
+#### cses.all: the dataset for the regressions
+###########################################################################################
 cses.df <- cses.df %>%
   select(-starts_with("IMD"))
 rm(cses)
@@ -166,13 +177,9 @@ optk_list <- mclapply(
 
 optk_df <- bind_rows(optk_list)
 
-## easy access to optk_df: 
-optk_df <- readRDS("DATA/optkdf.RDS")
 
 
 # join back to original data
-cses.df <- cses.df %>%
-  left_join(optk_df, by = c("ID", "case_ID"))
 
 optk.df <- cses.df %>% 
   group_by(case_ID) %>%
@@ -270,7 +277,8 @@ modelsummary(glm.ideology,
 
 cses.dist <- cses.df %>%
   mutate(Dist0 = abs(Ideology - 5)) %>%
-  mutate(DistSq = Dist0^2)
+  mutate(DistSq = Dist0^2) %>%
+  mutate(bin.k2 = ifelse(opt_k == 2, 1, 0))
 
 modD1 <- "bin.k2 ~ Age + Gender + Education + IncomeQ + Dist0 + Satisfaction.Dem | case_ID"
 modD2 <- "bin.k2 ~ Age + Gender + Education + DistSq  | case_ID"
@@ -279,13 +287,13 @@ modD4 <- "bin.k2 ~ Education + Dist0 + Satisfaction.Dem  | case_ID"
 modD5 <- "bin.k2 ~ Education + Satisfaction.Dem + DistSq  | case_ID"
 modD6 <- "bin.k2 ~ Education + Dist0  | case_ID"
 
-### models with Democracy Satisfaction as main variable
-mod01 <- "bin.k2 ~ Age + Gender + Education + IncomeQ + Dist0 + Satisfaction.Dem | case_ID"
-mod02 <- "bin.k2 ~ Age + Gender + Satisfaction.Dem + Dist0  | case_ID"
-mod03 <- "bin.k2 ~ Satisfaction.Dem + Dist0  | case_ID"
-mod04 <- "bin.k2 ~ Education + Dist0 + Satisfaction.Dem  | case_ID"
-mod05 <- "bin.k2 ~ Education + Satisfaction.Dem + IncomeQ  | case_ID"
-mod06 <- "bin.k2 ~ Satisfaction.Dem  | case_ID"
+### models with Dist0 as main variable, 
+mod01 <- "bin.k2 ~ Dist0 + Age + Gender + Education + IncomeQ | case_ID"
+mod02 <- "bin.k2 ~ Dist0 + Age + Gender | case_ID"
+mod03 <- "bin.k2 ~ Dist0 + Age + IncomeQ | case_ID"
+mod04 <- "bin.k2 ~ Dist0 + Education + IncomeQ   | case_ID"
+mod05 <- "bin.k2 ~ Dist0  | case_ID"
+#mod06 <- "bin.k2 ~ Satisfaction.Dem  | case_ID"
 
 
 
@@ -293,12 +301,12 @@ feDist.fun <- function(m){
   feglm(
  fml = as.formula(m),
   family = binomial(link = "logit"),
-  data   = cses.dist
+  data   = cses.all
 )
 }
 
-distmod <- list(modD6, modD3, modD5, modD4, modD2, modD1)
-distmod2 <- list(mod01, mod02, mod03, mod04, mod05, mod06)
+#distmod <- list(modD6, modD3, modD5, modD4, modD2, modD1)
+distmod2 <- list(mod01, mod02, mod03, mod04, mod05)
 
 
 DistReg <- lapply(distmod2, feDist.fun)
@@ -311,17 +319,17 @@ modelsummary(DistReg,
   statistic = "[{conf.low}, {conf.high}]",
   gof_map   = c("nobs", "aic", "bic"),
   vcov = "HC1",
-  conf_level = 0.95,
-  output = "latex",
-  booktabs = TRUE,
-  file = "~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/csesDistReg.tex"
+  conf_level = 0.995
+#  output = "latex",
+#  booktabs = TRUE,
+#  file = "~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/csesDistReg.tex"
 )
 
 modelplot(
   DistReg, 
   exponentiate = T, 
   vcov = "HC1", 
-  conf_level = 0.95,
+  conf_level = 0.995,
   coef_rename = c(
     "Dist0" = "Ideol. Distance", 
     "IncomeQ" = "Income",
@@ -339,8 +347,25 @@ cses.dist %>% group_by(Satisfaction.Dem) %>%
 
 
 
-
-
+## Dissatisfaction and Idelo Distance may be too correlated to each other
+ggplot(
+  cses.dist,
+  aes(
+    x = Ideology,
+    y = Satisfaction.Dem
+  )
+) +
+  geom_jitter(
+    alpha = 0.2,
+    width = 0.1,
+    height = 0.1
+  ) +
+  geom_smooth(
+    method = "lm",
+    se = TRUE,
+    color = "red"
+  ) +
+  theme_bw(base_size = 18)
 
 #cs_p_wide <- cs_p.df %>%
 #  pivot_wider(

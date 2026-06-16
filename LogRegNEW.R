@@ -1,5 +1,4 @@
 ## Replication files for the logistic regression in the Sociodemographics-Section
-setwd("~/Documents/Research/Dichotomous/github/Dichotomous/")
 library(dplyr)
 #library(texreg)
 library(tidyverse)
