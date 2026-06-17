@@ -1,12 +1,5 @@
 #
-#library(dplyr)
-library(cluster)
-library(factoextra)
 library(ggplot2)
-#library(ineq)
-library(rstatix)
-#library(tidyr)
-#library(IC2)
 library(parallel)
 library(scales)
 library(latex2exp)
@@ -14,7 +7,6 @@ library(haven)
 library(tidyverse)
 library(modelsummary)
 library(fixest)
-
 
 cses <- read_dta("DATA/cses_imd.dta")
 ##
@@ -25,7 +17,7 @@ cses.df <- cses %>%
     C.Education = IMD2003,
     C.Income = IMD2006,
     C.Ideology = IMD3006,
-    C.DissatDem = IMD3010,
+    C.SatDem = IMD3010,
     ID = IMD1005,
     Age = ifelse(C.Age > 99, NA, as.numeric(C.Age)),
     Gender = factor(case_when(
@@ -35,15 +27,15 @@ cses.df <- cses %>%
     )),
     Education = ifelse(C.Education > 4, NA, as.factor(C.Education)),
     IncomeQ = ifelse(C.Income > 5, NA, as.factor(C.Income)),
-    Ideology = ifelse(C.Ideology > 10, NA, as.numeric(C.Ideology)),
-    Satisfaction.Dem = case_when(                      ### Important: we actually measure satisfaction
-      C.DissatDem == 5 ~ 1,
-      C.DissatDem == 4 ~ 2,
-      C.DissatDem == 6 ~ 3,
-      C.DissatDem == 2 ~ 4,
-      C.DissatDem == 1 ~ 5,
+    Ideology = ifelse(C.Ideology > 10, NA, as.numeric(C.Ideology)), 
+    SatisfactionDem = case_when(
+      C.SatDem == 5 ~ 1,   # not at all satisfied
+      C.SatDem == 4 ~ 2,   # not very satisfied
+      C.SatDem == 6 ~ 3,   # neither nor
+      C.SatDem == 2 ~ 4,   # fairly satisfied
+      C.SatDem == 1 ~ 5,   # very satisfied
       TRUE ~ NA_real_
-    ),
+    ),   
     Country = IMD1006_NAM,
     Year = as.character(IMD1008_YEAR),
     case_ID = paste(Country, Year, sep = "_")
@@ -56,8 +48,12 @@ cses.df <- cses %>%
     )) %>%
   mutate(Dist0 = abs(Ideology - 5)) %>%
   mutate(DistSq = Dist0^2) 
+###########
+rm(cses)  #
+gc()      #
+###########
 
-optk_df <- readRDS("DATA/optkdf.RDS")
+optk_df <- readRDS("DATA/optkdf.RDS")   # generated through CSES_Cluster.R
 
 # join back to original data
 cses.all <- cses.df %>%
@@ -66,134 +62,90 @@ cses.all <- cses.df %>%
 
 #### cses.all: the dataset for the regressions
 ###########################################################################################
-cses.df <- cses.df %>%
-  select(-starts_with("IMD"))
-rm(cses)
-gc()
-
-## Assess the effect of Education
-rating_vars <- grep("^party_rating", names(cses.df), value = TRUE)
-
-cses.edu <- cses.df %>%
-  mutate(
-    sd_allparties = apply(select(., all_of(rating_vars)), 1, sd, na.rm = TRUE),
-    mean_allparties = apply(select(., all_of(rating_vars)), 1, mean, na.rm = TRUE),
-    cv_allparties = sd_allparties / mean_allparties,
-    n_rated = apply(select(., all_of(rating_vars)), 1, function(x) sum(!is.na(x)))
-  )
-
-cses.edu %>% group_by(Education) %>%
-  reframe(mean.cv = mean(cv_allparties, na.rm = T),
-          mean.nonNA = mean(n_rated, na.rm = T))
-
-#ggplot(data = cses.edu, aes(group = Education, y = Satisfaction.Dem, x = Education)) + geom_boxplot()
-#cor(cses.edu$Education, cses.edu$Satisfaction.Dem, use = "everything")
-
-cses.edu %>% 
-  group_by(Education) %>% 
-  reframe(
-    mn.Satisf = mean(Satisfaction.Dem, na.rm =T),
-    mn.Income = mean(IncomeQ, na.rm = T),
-    mn.Ideology = mean(Ideology, na.rm = T)
-  )
-
-summary(lm(Satisfaction.Dem ~ Education, data = cses.edu))  # 0.08***
-summary(lm(Satisfaction.Dem ~ IncomeQ, data = cses.edu))    # 0.06***
-summary(lm(Satisfaction.Dem ~ Ideology, data = cses.edu))    # 0.02***
-
-cor(cses.edu$Satisfaction.Dem, cses.edu$Ideology, use = "na")
-
-## End assess of effect of Education
+### models with Dist0 as main variable, 
+mod01 <- "bin.k2 ~ Dist0 + Age + Gender + Education + IncomeQ | case_ID"
+mod02 <- "bin.k2 ~ Dist0 + Age + Gender | case_ID"
+mod03 <- "bin.k2 ~ Dist0 + Age + IncomeQ | case_ID"
+mod04 <- "bin.k2 ~ Dist0 + Education + IncomeQ   | case_ID"
+mod05 <- "bin.k2 ~ Dist0  | case_ID"
+#############################################
+## Robustness Check: We replace Dist0 with SatisfactionDem in mod01
+mod01.sat <- "bin.k2 ~ Satisfaction.Dem + Age + Gender + Education + IncomeQ | case_ID"
+mod01.both <- "bin.k2 ~ Dist0 + Satisfaction.Dem + Age + Gender + Education + IncomeQ | case_ID"
 
 
-cs_p.df <- cses.df %>% 
-  # reshape party ratings wide → long
-  pivot_longer(
-    cols = starts_with("party_rating"),
-    names_to = "party",
-    values_to = "Rating"
-  ) %>%
-  group_by(case_ID, ID) %>%
-  # keep only respondents with at least 6 valid ratings
-  filter(sum(!is.na(Rating)) >= 6) %>%
-  ungroup() %>%
-  group_by(case_ID) %>%
-  # keep only elections with ≥ 100 valid respondents
-  filter(n_distinct(ID) >= 100) %>%
-  ungroup()
-
-cses.df <- cses.df %>% filter(., ID %in% unique(cs_p.df$ID))
-rm(cs_p.df)
-gc()
-
-fv_per_respondent <- function(ratings, kmax = 4) {
-  ratings <- ratings[!is.na(ratings)]
-  if(length(ratings) < 6) return(NA_integer_)
-  
-  eps <- sample(seq(-.1, .1, .001), 1)
-  rat.temp <- ratings + eps
-  sc.rat <- scale(rat.temp)
-  sc.rat <- as.matrix(sc.rat)
-  
-  silh.values <- tryCatch({
-    fviz_nbclust(sc.rat, kmeans, method = "silhouette", k.max = kmax)[["data"]][["y"]]
-  }, error = function(e) {
-    return(rep(NA, kmax))
-  })
-  
-  if(all(is.na(silh.values))) return(NA_integer_)
-  
-  return(which.max(silh.values))
+feDist.fun <- function(m){
+  feglm(
+ fml = as.formula(m),
+  family = binomial(link = "logit"),
+  data   = cses.all
+)
 }
 
-party_vars <- paste0("party_rating_", letters[1:9])
-#
-rating_list <- cses.df %>%
-  select(ID, case_ID, all_of(party_vars)) %>%
-  group_split(ID, case_ID) %>%
-  lapply(function(df) {
-    list(
-      ID = df$ID[1],
-      case_ID = df$case_ID[1],
-      ratings = unlist(df[1, party_vars])
-    )
-  })
+#distmod <- list(modD6, modD3, modD5, modD4, modD2, modD1)
+distmod2 <- list(
+  "Main" = mod01, 
+  "Alt.01" = mod02, 
+  "Alt.02" = mod03, 
+  "Alt.03" = mod04, 
+  "Alt.04" = mod05, 
+  "Satisf." = mod01.sat, 
+  "Both" = mod01.both)
 
-ncores <- 16
+DistReg <- lapply(distmod2, feDist.fun)
 
+# robustness check
 
-## takes about 15 min! read the file directly
-optk_list <- mclapply(
-  rating_list,
-  function(x) {
-    data.frame(
-      ID = x$ID,
-      case_ID = x$case_ID,
-      opt_k = fv_per_respondent(x$ratings, kmax = 4)
-    )
-  },
-  mc.cores = ncores
+modelsummary(DistReg, 
+  exponentiate = T, 
+  stars = T, 
+  statistic = "[{conf.low}, {conf.high}]",
+  gof_map   = c("nobs", "aic", "bic"),
+  vcov = "HC1",
+  conf_level = 0.995,
+    coef_rename = c(
+    "Dist0" = "Ideol. Distance", 
+    "IncomeQ" = "Income",
+    "GenderM" = "Male",
+    "Satisfaction.Dem" = "Satisf. Democ.")
+#  output = "latex",
+#  booktabs = TRUE,
+#  file = "~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/csesDistReg.tex"
 )
 
-optk_df <- bind_rows(optk_list)
+modelplot(
+  DistReg, 
+  exponentiate = T, 
+  vcov = "HC1", 
+  conf_level = 0.995,
+  coef_rename = c(
+    "Dist0" = "Ideol. Distance", 
+    "IncomeQ" = "Income",
+    "GenderM" = "Male",
+    "Satisfaction.Dem" = "Satisf. Democ.")
+) + theme_bw(base_size = 24) + geom_vline(xintercept = 1, linetype = "dashed") +
+  scale_color_viridis_d()
+ggsave("RegressionPlots.pdf", width = 16, height = 8)
+
+
+## relationship between Satisfaction.Dem and Dist0
+ggplot(data = cses.all, aes(x = Satisfaction.Dem, y = Dist0))  +
+  geom_hex() +
+  theme_bw(base_size = 22)
+
+car::vif(lm(bin.k2 ~ Satisfaction.Dem + Dist0, data = cses.all))
+## close to 1: no multicollinearity problem
+
+prop.table(table(cses.all$Satisfaction.Dem, cses.all$Dist0))
 
 
 
-# join back to original data
 
-optk.df <- cses.df %>% 
-  group_by(case_ID) %>%
-  dplyr::filter(., is.na(opt_k)==F) %>%
-  reframe(k2 = length(opt_k[opt_k == 2])/length(opt_k),
-          k3 = length(opt_k[opt_k == 3])/length(opt_k),
-          k4 = length(opt_k[opt_k > 4]) / length(opt_k) )
 
-rm(rating_list, party_vars, optk_list)
-gc()
+
 
 
 ### Regression analysis
-cses.df <- cses.df %>% mutate(bin.k2 = ifelse(opt_k == 2, 1, 0))
 mod01 <- "bin.k2 ~ Age + Gender + Education + IncomeQ + Ideology + Satisfaction.Dem | case_ID"
 mod02 <- "bin.k2 ~ Age + Gender + Education  | case_ID"
 mod03 <- "bin.k2 ~ Education + Ideology  | case_ID"
@@ -287,56 +239,6 @@ modD4 <- "bin.k2 ~ Education + Dist0 + Satisfaction.Dem  | case_ID"
 modD5 <- "bin.k2 ~ Education + Satisfaction.Dem + DistSq  | case_ID"
 modD6 <- "bin.k2 ~ Education + Dist0  | case_ID"
 
-### models with Dist0 as main variable, 
-mod01 <- "bin.k2 ~ Dist0 + Age + Gender + Education + IncomeQ | case_ID"
-mod02 <- "bin.k2 ~ Dist0 + Age + Gender | case_ID"
-mod03 <- "bin.k2 ~ Dist0 + Age + IncomeQ | case_ID"
-mod04 <- "bin.k2 ~ Dist0 + Education + IncomeQ   | case_ID"
-mod05 <- "bin.k2 ~ Dist0  | case_ID"
-#mod06 <- "bin.k2 ~ Satisfaction.Dem  | case_ID"
-
-
-
-feDist.fun <- function(m){
-  feglm(
- fml = as.formula(m),
-  family = binomial(link = "logit"),
-  data   = cses.all
-)
-}
-
-#distmod <- list(modD6, modD3, modD5, modD4, modD2, modD1)
-distmod2 <- list(mod01, mod02, mod03, mod04, mod05)
-
-
-DistReg <- lapply(distmod2, feDist.fun)
-
-
-
-modelsummary(DistReg, 
-  exponentiate = T, 
-  stars = T, 
-  statistic = "[{conf.low}, {conf.high}]",
-  gof_map   = c("nobs", "aic", "bic"),
-  vcov = "HC1",
-  conf_level = 0.995
-#  output = "latex",
-#  booktabs = TRUE,
-#  file = "~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/csesDistReg.tex"
-)
-
-modelplot(
-  DistReg, 
-  exponentiate = T, 
-  vcov = "HC1", 
-  conf_level = 0.995,
-  coef_rename = c(
-    "Dist0" = "Ideol. Distance", 
-    "IncomeQ" = "Income",
-    "GenderM" = "Male")
-) + theme_bw(base_size = 24) + geom_vline(xintercept = 1, linetype = "dashed") +
-  scale_color_viridis_d()
-ggsave("RegressionPlots.pdf", width = 16, height = 8)
 
 
 
