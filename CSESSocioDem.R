@@ -418,6 +418,38 @@ ggsave("~/Documents/Research/Dichotomous/git/67b5f34c104b85acf4a11317/cses.pdf",
 
 
 ###########################################################
+## Regressions on variables
+## IMD5013       >>> ELECTORAL FORMULA IN ALL SEGMENTS: LOWER HOUSE
+##  1. MAJORITARIAN  2. PROPORTIONAL  3. MIXED  9. MISSING
+cses.all <- cses.all %>% 
+  mutate(
+    C.ElectSystem = ifelse(IMD5013 == 9, NA, as.factor(IMD5013)),
+    NbEffParties  = ifelse(IMD5058_1 > 100, NA, as.numeric(IMD5058_1)) ) 
+
+cses.short <- cses.all %>% 
+  dplyr::select(., c("case_ID", "C.ElectSystem", "NbEffParties", "IMD1006_UNALPHA3")) %>% unique(.)
+
+cses.elecsystem <- summary_tables %>%
+  left_join(
+    x = ., 
+    y = cses.short,
+    by = "case_ID"
+  )
+
+reg.es <- lm(
+  formula = k_2_pct ~ as.factor(C.ElectSystem) + NbEffParties, 
+  data = cses.elecsystem
+)
+summary(reg.es)
+
+library(estimatr)
+reg.esClst <- lm_robust(
+  formula = k_2_pct ~ as.factor(C.ElectSystem) + NbEffParties, 
+  data = cses.elecsystem, 
+  clusters = IMD1006_UNALPHA3
+)
+summary(reg.esClst)
+
 
 
 

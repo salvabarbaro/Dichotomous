@@ -2,13 +2,13 @@ library(dplyr)
 library(cluster)
 
 x <- c(1.3, 1.9, 1.5, 1.9, 1.6, 1.9)
-
+x <- c(1.2, 1.3, 1.4, 1.7, 1.8, 1.9)
 df <- tibble(
   id = seq_along(x),
   x = x
 )
 
-set.seed(123)
+set.seed(55234)
 
 km <- kmeans(df$x, centers = 2, nstart = 25)
 
@@ -42,7 +42,7 @@ sil_info <- df %>%
   ungroup()
 
 sil_info
-stargazer::stargazer(sil_info, summary = F)
+stargazer::stargazer(sil_info, summary = F, rownames = F)
 
 
 sil <- silhouette(km$cluster, dist(df$x))
