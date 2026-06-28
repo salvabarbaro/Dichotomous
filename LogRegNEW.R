@@ -3,6 +3,7 @@ library(dplyr)
 #library(texreg)
 library(tidyverse)
 library(modelsummary)
+library(fixest)
 #library(estimatr) ## if lm_robust 
 library(ggplot2)
 library(sandwich)
@@ -24,7 +25,7 @@ logregdata.df <- rbind(regdata.gren %>% mutate(df = "Grenoble"),
 logregmod.WDP <- "WDP.Gini ~ Age + Gender + Educ.lvl"
 logregmod.k2 <- "k2strong ~ Age + Gender + Educ.lvl"
 logregmod.RC1  <- "WDP.Gini ~ Age + Gender + Educ.lvl + ext.right + ext.left"
-logregmod.k2R <- "k2strong ~ Age + Gender + Educ.lvl + ext.right + ext.left"
+logregmod.k2R <- "k2all ~ Age + Gender + Educ.lvl + ext.right + ext.left"
 # Regressions
 logreg.WDP.Gren <- glm(formula = logregmod.WDP, 
                        family = "binomial", 
@@ -82,18 +83,20 @@ mods <- list(logreg.WDP.Gren, logreg.WDP.Gra, logreg.WDP.Fra,
              logreg.k2.Gren, logreg.k2.Gra, logreg.k2.Fra,
              logreg.k2R.Gren, logreg.k2R.Gra, logreg.k2R.Fra)
 
-mods <- list("WDP.Main - Grenoble" =logreg.WDP.Gren, 
-             "WDP.Main - Graz" = logreg.WDP.Gra, 
-             "WDP.Main - France22" = logreg.WDP.Fra,
-             "WDP.Extr - Grenoble" = logreg.RC1.Gren, 
-             "WDP.Extr - Graz" = logreg.RC1.Gra, 
-             "WDP.Extr - France22" =logreg.RC1.Fra,
-             "K2.Main - Grenoble" = logreg.k2.Gren, 
-             "K2.Main - Graz" =logreg.k2.Gra, 
-             "K2.Main - France22" =logreg.k2.Fra,
-             "K2.Extr - Grenoble" = logreg.k2R.Gren, 
-             "K2.Extr - Graz" =logreg.k2R.Gra, 
-             "K2.Extr - France22" =logreg.k2R.Fra)
+mods <- list(
+#  "WDP.Main - Grenoble" =logreg.WDP.Gren, 
+#  "WDP.Main - Graz" = logreg.WDP.Gra, 
+#  "WDP.Main - France22" = logreg.WDP.Fra,
+#  "WDP.Extr - Grenoble" = logreg.RC1.Gren, 
+#  "WDP.Extr - Graz" = logreg.RC1.Gra, 
+#  "WDP.Extr - France22" =logreg.RC1.Fra,
+#  "K2.Main - Grenoble" = logreg.k2.Gren, 
+#  "K2.Main - Graz" =logreg.k2.Gra, 
+#  "K2.Main - France22" =logreg.k2.Fra,
+  "K2.Extr - Grenoble" = logreg.k2R.Gren, 
+  "K2.Extr - Graz" =logreg.k2R.Gra, 
+  "K2.Extr - France22" =logreg.k2R.Fra
+)
 
 
 modelsummary(mods, 
@@ -107,6 +110,59 @@ modelplot(mods[1:6],
           conf_level = 0.9) + 
   geom_vline(xintercept = 1, col = "black") +
   coord_flip() + theme_gray(base_size = 22)
+
+
+##############################################################################################
+## run a common regression with survey fixed effects
+logregdata.df <- logregdata.df %>% 
+  mutate(radical = ifelse(ext.right == 1 | ext.left == 1, 1, 0)) %>%
+  mutate(radical = factor(radical)) %>%
+  dplyr::select(., c("id", "Gender", "Age", "Educ.lvl", "k2all", "k2strong", "ext.right", "ext.left", "radical", "df"))
+logregdata.df$Gender <- trimws(logregdata.df$Gender)
+
+logreg01 <- feglm(
+  fml = k2all ~ Age + Gender + Educ.lvl + ext.right + ext.left | df,
+  family = "binomial",
+  data = logregdata.df
+)
+
+logreg02 <- feglm(
+  fml = k2all ~ Age + Gender + Educ.lvl + radical | df,
+  family = "binomial",
+  data = logregdata.df
+)
+
+# The variable 'GenderM' has been removed because of collinearity (see $collin.var).
+modelsummary(
+  models = list(logreg01, logreg02),
+  exponentiate = T,
+  statistic = "[{conf.low}, {conf.high}]",
+  stars = T,
+  vcov = "HC1",
+#  cluster = ~id, 
+  gof_map   = c("nobs", "aic", "bic"),
+  coef_map = c(
+    "ext.right"  = "Extreme (right)",
+    "ext.left"   = "Extreme (left)",
+    "radical1" = "Extreme",
+    "Educ.lvl" = "Education",
+    "GenderM"      = "Gender-Male",
+    "Age" = "Age"
+  )
+)
+
+modelplot(list(logreg01, logreg02),
+  exponentiate = T, vcov = "HC1",
+    coef_map = c(
+    "ext.right"  = "Extreme (right)",
+    "ext.left"   = "Extreme (left)",
+    "radical1" = "Extreme",
+    "Educ.lvl" = "Education",
+    "GenderM"      = "Gender-Male",
+    "Age" = "Age"
+  )
+) + theme_bw(base_size = 24) + geom_vline(xintercept = 1, linetype = "dashed") +
+  scale_color_viridis_d()
 
 
 
@@ -125,7 +181,7 @@ modelplot(mods[1:6],
 
 
 
-regfun <- function(m){
+^regfun <- function(m){
   logreg <- glm(formula = get(m) ~ Age + Gender + Educ.lvl,
       data = regdata.fran,
       family = "binomial")
