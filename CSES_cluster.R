@@ -151,8 +151,6 @@ cou.table <- res %>% filter(., case_ID %in% cou.selection) %>%
   dplyr::select(., c("case_ID", "k_2_pct", "k_3_pct", "k_4_pct")) 
 stargazer::stargazer(cou.table, summary = F)
 
-
-
 res_long <- res %>%
   pivot_longer(cols = ends_with("pct"),
                names_to = "k_type",
@@ -177,6 +175,20 @@ p1 <- ggplot(res_long, aes(x = k_type, y = percent)) +
   theme(legend.position = "none")
 ggsave("cses169.pdf", plot = p1, width = 16, height = 8)
 
-
-
 ###########################################################
+### Regression: Can we explain the share of k2?
+## Polarization data
+polariz.df <- readRDS(file = "polarization.RDS")
+## Data on effective number of parties and Electoral System
+cses.short <- cses_imd %>% 
+  mutate(
+    C.ElectSystem = ifelse(IMD5013 == 9, NA, as.factor(IMD5013)),
+    NbEffParties  = ifelse(IMD5058_1 > 100, NA, as.numeric(IMD5058_1)) ) 
+
+#%>% 
+#  dplyr::select(., c("case_ID", "C.ElectSystem", "NbEffParties", "IMD1006_UNALPHA3")) %>% unique(.)
+
+
+df <- res %>%
+  left_join(x = ., y = polariz.df, by = "case_ID")
+
