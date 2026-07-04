@@ -23,7 +23,11 @@ cses.df <- cses_imd %>%
          C.Income = IMD2006,
          C.SocEconStatus = IMD2016,
          C.Ideology = IMD3006,
-         C.SatisfDem = IMD3010) %>%
+         C.SatisfDem = IMD3010,
+         C.ElectSystem = IMD5013,
+         C.NbEffParties = IMD5058_1,
+         C.case_ID = IMD1004
+        ) %>% 
   dplyr::select(starts_with("C.")) %>%
   mutate(
     Age = ifelse(C.Age > 99, NA, as.numeric(C.Age)),
@@ -34,7 +38,10 @@ cses.df <- cses_imd %>%
     Education = ifelse(C.Education > 4, NA, as.factor(C.Education) ),
     Income = ifelse(C.Income > 5, NA, as.factor(C.Income)),
     Ideology =  ifelse(C.Ideology > 10, NA, C.Ideology),
-    Dissatisfaction = ifelse(C.SatisfDem >5, NA, as.factor(C.SatisfDem))
+    Dissatisfaction = ifelse(C.SatisfDem >5, NA, as.factor(C.SatisfDem)),
+    ElectSystem = ifelse(C.ElectSystem == 9, NA, as.factor(C.ElectSystem)),
+    NbEffParties  = ifelse(C.NbEffParties > 100, NA, as.numeric(C.NbEffParties)),
+    case_ID = C.case_ID
   )
 
 #load("~/Documents/Research/Elections/AnnaProjects/CondorcetParadox/Data/cses_imd.rdata")
@@ -179,16 +186,8 @@ ggsave("cses169.pdf", plot = p1, width = 16, height = 8)
 ### Regression: Can we explain the share of k2?
 ## Polarization data
 polariz.df <- readRDS(file = "polarization.RDS")
-## Data on effective number of parties and Electoral System
-cses.short <- cses_imd %>% 
-  mutate(
-    C.ElectSystem = ifelse(IMD5013 == 9, NA, as.factor(IMD5013)),
-    NbEffParties  = ifelse(IMD5058_1 > 100, NA, as.numeric(IMD5058_1)) ) 
-
-#%>% 
-#  dplyr::select(., c("case_ID", "C.ElectSystem", "NbEffParties", "IMD1006_UNALPHA3")) %>% unique(.)
-
-
-df <- res %>%
-  left_join(x = ., y = polariz.df, by = "case_ID")
-
+# adding polarization data to cses.df
+cses.df <- cses.df %>% 
+  left_join(x = ., y = polariz.df, by = "case_ID") %>%
+  left_join(x = ., y = res, by = "case_ID")
+### Fehlermeldung: mann muss case_ID oben neu generieren, damit Albania_2005 statt ALB_2005
