@@ -41,7 +41,8 @@ cses.df <- cses_imd %>%
     Dissatisfaction = ifelse(C.SatisfDem >5, NA, as.factor(C.SatisfDem)),
     ElectSystem = ifelse(C.ElectSystem == 9, NA, as.factor(C.ElectSystem)),
     NbEffParties  = ifelse(C.NbEffParties > 100, NA, as.numeric(C.NbEffParties)),
-    case_ID = C.case_ID
+    case_ID = C.case_ID,
+    Country = cses_imd$IMD1006_UNALPHA3
   )
 
 #load("~/Documents/Research/Elections/AnnaProjects/CondorcetParadox/Data/cses_imd.rdata")
@@ -191,20 +192,42 @@ polariz.df <- readRDS(file = "polarization.RDS")
 cses.df <- cses.df %>% 
   left_join(x = ., y = polariz.df, by = "case_ID") %>%
   left_join(x = ., y = res, by = "case_ID")
-### Fehlermeldung: mann muss case_ID oben neu generieren, damit Albania_2005 statt ALB_2005
 
-#### Regression
-regk2pct01 <- lm(
-  formula = k_2_pct ~ polarization_parties + ElectSystem + NbEffParties,
-  data = cses.df
+cses.ols <- cses.df %>% 
+  dplyr::select(., c("k_2_pct", "ElectSystem", "NbEffParties", 
+  "case_ID", "Country",
+  "polarization_parties", "polarization_voter")) %>%
+  unique()
+
+#### Regressions
+## models
+regmods.k2 <- list(
+  "parties" = "k_2_pct ~ polarization_parties + ElectSystem + NbEffParties",
+  "voters"  = "k_2_pct ~ polarization_voter + ElectSystem + NbEffParties",
+  "short"   = "k_2_pct ~  ElectSystem + NbEffParties",
+  "p.short" = "k_2_pct ~ polarization_parties",
+  "v.short" = "k_2_pct ~ polarization_voter"
 )
 
-regk2pct02 <- lm(
-  formula = k_2_pct ~ polarization_voter + ElectSystem + NbEffParties,
-  data = cses.df
+olsfun <- function(m){
+  reg = lm(formula = m, data = cses.ols)
+}
+
+olsregs <- lapply(regmods.k2, olsfun)
+
+modelsummary::modelsummary(olsregs, 
+  stars = T, 
+  gof_omit = "AIC|BIC|Log.|RMSE",
+  coef_map = c(
+    "polarization_parties" = "Party Polarization",
+    "polarization_voter" = "Voter Polarization",
+    "NbEffParties" = "Nb. Eff. Parties",
+    "ElectSystem" = "Electoral System" 
+  ),
+  vcov = ~Country,
 )
 
-modelsummary::modelsummary(list(regk2pct01, regk2pct02), stars = TRUE, gof_omit = "AIC|BIC|Log.|RMSE")
 
-modelsummary::modelplot(list(regk2pct01, regk2pct02),
+
+modelsummary::modelplot(olsregs,
 coef_omit = "Intercept") + theme_bw(base_size = 28)
