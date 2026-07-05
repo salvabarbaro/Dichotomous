@@ -26,7 +26,7 @@ cses.df <- cses_imd %>%
          C.SatisfDem = IMD3010,
          C.ElectSystem = IMD5013,
          C.NbEffParties = IMD5058_1,
-         C.case_ID = IMD1004
+         C.case_ID = paste(IMD1006_NAM, IMD1008_YEAR, sep = "_")
         ) %>% 
   dplyr::select(starts_with("C.")) %>%
   mutate(
@@ -148,6 +148,7 @@ write.csv(summary_tables, "DATA/csesSummary.csv", row.names = F)
 
 summary_tables <- read.csv("DATA/csesSummary.csv", header = T)
 res <- summary_tables
+rm(summary_tables)
 
 sapply(res[,6:8], mean)
 
@@ -191,3 +192,19 @@ cses.df <- cses.df %>%
   left_join(x = ., y = polariz.df, by = "case_ID") %>%
   left_join(x = ., y = res, by = "case_ID")
 ### Fehlermeldung: mann muss case_ID oben neu generieren, damit Albania_2005 statt ALB_2005
+
+#### Regression
+regk2pct01 <- lm(
+  formula = k_2_pct ~ polarization_parties + ElectSystem + NbEffParties,
+  data = cses.df
+)
+
+regk2pct02 <- lm(
+  formula = k_2_pct ~ polarization_voter + ElectSystem + NbEffParties,
+  data = cses.df
+)
+
+modelsummary::modelsummary(list(regk2pct01, regk2pct02), stars = TRUE, gof_omit = "AIC|BIC|Log.|RMSE")
+
+modelsummary::modelplot(list(regk2pct01, regk2pct02),
+coef_omit = "Intercept") + theme_bw(base_size = 28)
