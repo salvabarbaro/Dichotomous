@@ -197,16 +197,27 @@ cses.ols <- cses.df %>%
   dplyr::select(., c("k_2_pct", "ElectSystem", "NbEffParties", 
   "case_ID", "Country",
   "polarization_parties", "polarization_voter")) %>%
-  unique()
+  unique() 
+
+saveRDS(cses.ols, file = "DATA/csesOLS.RDS")
+cses.ols <- readRDS("DATA/csesOLS.RDS") %>%
+  mutate(year = as.integer(stringr::str_extract(case_ID, "\\d{4}$")))
+#vdem <- readRDS("DATA/vdem.RDS")
+#cses.ols <- cses.ols %>% left_join(
+#  x = ., y = vdem, by = c("Country" = "iso3c")
+#)
+
 
 #### Regressions
 ## models
 regmods.k2 <- list(
-  "parties" = "k_2_pct ~ polarization_parties + ElectSystem + NbEffParties",
-  "voters"  = "k_2_pct ~ polarization_voter + ElectSystem + NbEffParties",
-  "short"   = "k_2_pct ~  ElectSystem + NbEffParties",
+  "parties" = "k_2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + year",
+#  "voters"  = "k_2_pct ~ polarization_voter + ElectSystem + NbEffParties + year",
+  "short"   = "k_2_pct ~  factor(ElectSystem) + NbEffParties + year",
   "p.short" = "k_2_pct ~ polarization_parties",
-  "v.short" = "k_2_pct ~ polarization_voter"
+#  "v.short" = "k_2_pct ~ polarization_voter",
+  "countryFE" = "k_2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + Country",
+  "coutimeFE" = "k_2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + Country + year"
 )
 
 olsfun <- function(m){
@@ -215,6 +226,7 @@ olsfun <- function(m){
 
 olsregs <- lapply(regmods.k2, olsfun)
 
+options("modelsummary_format_numeric_latex" = "plain")
 modelsummary::modelsummary(olsregs, 
   stars = T, 
   gof_omit = "AIC|BIC|Log.|RMSE",
@@ -222,12 +234,43 @@ modelsummary::modelsummary(olsregs,
     "polarization_parties" = "Party Polarization",
     "polarization_voter" = "Voter Polarization",
     "NbEffParties" = "Nb. Eff. Parties",
-    "ElectSystem" = "Electoral System" 
-  ),
-  vcov = ~Country,
+    "factor(ElectSystem)2" = "ElecSys-Proport.",
+    "factor(ElectSystem)3" = "ElecSys-Mixed",
+    "year" = "Time",
+    "Country" = "Country" ),
+#  statistic = "[{conf.low}, {conf.high}]",
+  vcov = list(
+    ~ Country,
+    ~ Country,
+    ~ Country,
+    ~ year,
+    ~ Country + year),
+  output = "k2OLS.tex",
+  conf_level = 0.95
 )
 
+## for the paper: focus on "parties", "short" and "p.short"
 
 
-modelsummary::modelplot(olsregs,
-coef_omit = "Intercept") + theme_bw(base_size = 28)
+modelsummary::modelplot(
+  olsregs,
+  coef_omit = "Intercept",
+  coef_map = c(
+    "polarization_parties" = "Party Polarization",
+    "polarization_voter" = "Voter Polarization",
+    "NbEffParties" = "Nb. Eff. Parties",
+    "factor(ElectSystem)2" = "ElecSys-Proport.",
+    "factor(ElectSystem)3" = "ElecSys-Mixed",
+    "year" = "Time",
+    "Country" = "Country" ),
+  vcov = list(
+    ~ Country,
+    ~ Country,
+    ~ Country,
+    ~ year,
+    ~ Country + year),
+  conf_level = 0.95
+) + theme_bw(base_size = 28) + 
+  scale_color_viridis_d() + 
+  geom_vline(xintercept = 0, linetype = "dashed")
+ggsave(filename= "k2OLS.pdf", width = 16, height = 8)
