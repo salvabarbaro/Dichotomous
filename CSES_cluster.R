@@ -245,7 +245,7 @@ modelsummary::modelsummary(olsregs,
     ~ Country,
     ~ year,
     ~ Country + year),
-  output = "k2OLS.tex",
+  output = "maike.tex",
   conf_level = 0.95
 )
 

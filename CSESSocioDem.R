@@ -70,8 +70,8 @@ mod04 <- "bin.k2 ~ Dist0 + Education + IncomeQ   | case_ID"
 mod05 <- "bin.k2 ~ Dist0  | case_ID"
 #############################################
 ## Robustness Check: We replace Dist0 with SatisfactionDem in mod01
-mod01.sat <- "bin.k2 ~ Satisfaction.Dem + Age + Gender + Education + IncomeQ | case_ID"
-mod01.both <- "bin.k2 ~ Dist0 + Satisfaction.Dem + Age + Gender + Education + IncomeQ | case_ID"
+mod01.sat <- "bin.k2 ~ SatisfactionDem + Age + Gender + Education + IncomeQ | case_ID"
+mod01.both <- "bin.k2 ~ Dist0 + SatisfactionDem + Age + Gender + Education + IncomeQ | case_ID"
 
 
 feDist.fun <- function(m){
