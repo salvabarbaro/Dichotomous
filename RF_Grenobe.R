@@ -315,6 +315,26 @@ greno.df <- cbind(grenoble_cluster.df %>%
          EDUC =   na_if(EDUC,   " NSPP")) %>%
   mutate(Educ.lvl = as.numeric(ifelse(EDUC  == " S", 3, EDUC)))
 
+greno.small <- greno.df %>%
+  dplyr::select(c("id", "Candidate", "Approval", "clus.assing", "match")) %>%
+  mutate(Cluster = factor(clus.assing), .after = "Approval") %>%
+  dplyr::select(., -c("clus.assing"))
+
+### log-reg approach
+mod.match <- glm(
+  match ~ Candidate,
+  family = binomial(link = "logit"),
+  data = greno.small
+)
+
+preds <- marginaleffects::avg_predictions(
+  mod.match,
+  by = "Candidate",
+  vcov = ~id
+)
+
+preds
+
 ## for presentation purpose: show two respondents
 greno.id2 <- greno.df %>% filter(, id == 2) %>%
   dplyr::select(., c("Candidate", "Rating", "Approval", "clus.assing", "match")) %>%

@@ -118,14 +118,15 @@ modelplot(
   exponentiate = T, 
   vcov = "HC1", 
   conf_level = 0.995,
-  coef_rename = c(
-    "Dist0" = "Ideol. Distance", 
+  coef_map = c(
     "IncomeQ" = "Income",
     "GenderM" = "Male",
-    "Satisfaction.Dem" = "Satisf. Democ.")
+        "Age" = "Age",
+    "SatisfactionDem" = "Satisf. Demo.",
+    "Dist0" = "Ideology")
 ) + theme_bw(base_size = 24) + geom_vline(xintercept = 1, linetype = "dashed") +
   scale_color_viridis_d()
-ggsave("RegressionPlots.pdf", width = 16, height = 8)
+ggsave("RegressionPlots.pdf", width = 16, height = 9)
 
 
 ## relationship between Satisfaction.Dem and Dist0
