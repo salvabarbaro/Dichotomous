@@ -320,6 +320,12 @@ greno.small <- greno.df %>%
   mutate(Cluster = factor(clus.assing), .after = "Approval") %>%
   dplyr::select(., -c("clus.assing"))
 
+saveRDS(
+  object = greno.small,
+  file = "DATA/grenosmall.RDS"
+)
+greno.small <- readRDS("DATA/grenosmall.RDS")
+
 ### log-reg approach
 mod.match <- glm(
   match ~ Candidate,
@@ -333,7 +339,63 @@ preds <- marginaleffects::avg_predictions(
   vcov = ~id
 )
 
-preds
+preds <- preds %>%
+  mutate(
+    Candidate = recode(
+      Candidate,
+      "EV_BH"  = "Hamon",
+      "EV_EM"  = "Macron",
+      "EV_FA"  = "Asselineau",
+      "EV_FF"  = "Fillon",
+      "EV_JC"  = "Cheminade",
+      "EV_JL"  = "Lassalle",
+      "EV_JLM" = "Mélenchon",
+      "EV_MLP" = "Le Pen",
+      "EV_NA"  = "Arthaud",
+      "EV_NDA" = "Dupont-Aignan",
+      "EV_PP"  = "Poutou"
+    )
+  )
+## candidate list
+# BH = "Hamon",
+# EM = "Macron",
+# FA = "Asselineau",
+# FF = "Fillon",
+# JC = "Cheminade",
+# JL = "Lassalle", 
+# JLM = "Mélenchon",
+# MLP = "Le Pen",
+# NA = "Arthaud",
+# NDA = "Dupont-Aignan"
+# PP = "Poutou"
+
+## Alternative with RE
+mod.match.re <- lme4::glmer(
+  match ~ Candidate + (1 | id),
+  family = binomial,
+  data = greno.small
+)
+
+summary(mod.match.re)
+
+marginaleffects::avg_predictions(
+  mod.match.re,
+  by = "Candidate"
+)
+
+ggplot(preds,
+       aes(x = reorder(Candidate, estimate),
+           y = estimate,
+           ymin = conf.low,
+           ymax = conf.high)) +
+  geom_pointrange(linewidth = 0.5) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Predicted probability of agreement"
+  ) +
+  theme_bw(base_size = 24)
+
 
 ## for presentation purpose: show two respondents
 greno.id2 <- greno.df %>% filter(, id == 2) %>%

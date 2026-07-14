@@ -1,18 +1,16 @@
-setwd("~/Documents/Research/Dichotomous/github/Dichotomous")
-#########################################
 library(dplyr)
 library(cluster)
 library(factoextra)
 library(ggplot2)
-library(ineq)
-library(dineq)
-library(rstatix)
+#library(ineq)
+#library(dineq)
+#library(rstatix)
 library(tidyr)
-library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
+#library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
 library(parallel)
-library(gtsummary)
+#library(gtsummary)
 library(modelsummary)
-library(rlang)
+#library(rlang)
 
 ## Read Data  (see Merge.R in Data/France22/)
 france22.df <- read.csv("DATA/France22.csv", header = T)
@@ -409,3 +407,70 @@ ols03 <- lm(formula = phi.value ~ optk2 + Age + Gender + Educ.lvl,
             data = fra.avg)
 gtsummary::tbl_regression(ols03)
 write.csv(fra.avg, "Data/OLSfra.csv", row.names = F)
+
+
+
+###### matching 
+
+fra.small <- fra.df %>%
+  dplyr::select(c("id", "Candidate", "Approval", "clus.assing", "match")) %>%
+  mutate(Cluster = factor(clus.assing), .after = "Approval") %>%
+  dplyr::select(., -c("clus.assing"))
+
+saveRDS(
+  object = fra.small,
+  file = "DATA/france22small.RDS"
+)
+###########################################
+fra.small <- readRDS("DATA/france22small.RDS")
+###########################################
+### log-reg approach
+mod.match <- glm(
+  match ~ Candidate,
+  family = binomial(link = "logit"),
+  data = fra.small
+)
+
+preds <- marginaleffects::avg_predictions(
+  mod.match,
+  by = "Candidate",
+  vcov = ~id
+)
+
+preds
+
+
+preds <- preds %>%
+  mutate(
+    Candidate = recode(
+      Candidate,
+      "EV_AH"  = "Hildago",  #10      centre
+      "EV_EM"  = "Macron",  #1        centre
+      "EV_EZ"  = "Zemmour", #4        extr right
+      "EV_FR"  = "Roussel", #8        extr left
+      "EV_JJ"  = "Lasalle",  #7?      NA 
+      "EV_JLM" = "Mélenchon", #3      extr left
+      "EV_MLP" = "Le Pen",  #2        extr right
+      "EV_NA"  = "Arthaud", #12       extr left
+      "EV_NDA" = "Dupont-Aignan", #9  extr right / centre
+      "EV_PP"  = "Poutou",  #11       extr left
+      "EV_VP"  = "Pecresse", #5       centre
+      "EV_YJ"  = "Jadot"  #6          centre
+    )
+  )
+
+##https://de.wikipedia.org/wiki/Pr%C3%A4sidentschaftswahl_in_Frankreich_2022
+
+ggplot(preds,
+       aes(x = reorder(Candidate, estimate),
+           y = estimate,
+           ymin = conf.low,
+           ymax = conf.high)) +
+  geom_pointrange(linewidth = 0.5) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Predicted probability of agreement"
+  ) +
+  theme_bw(base_size = 24)
+ggsave("matchfigFrance.pdf", width = 16, height = 9)
