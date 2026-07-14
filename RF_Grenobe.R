@@ -397,6 +397,9 @@ ggplot(preds,
   theme_bw(base_size = 24)
 
 
+
+
+
 ## for presentation purpose: show two respondents
 greno.id2 <- greno.df %>% filter(, id == 2) %>%
   dplyr::select(., c("Candidate", "Rating", "Approval", "clus.assing", "match")) %>%

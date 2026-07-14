@@ -474,3 +474,50 @@ ggplot(preds,
   ) +
   theme_bw(base_size = 24)
 ggsave("matchfigFrance.pdf", width = 16, height = 9)
+
+
+## Alternative with RE
+mod.match.re <- lme4::glmer(
+  match ~ Candidate + (1 | id),
+  family = binomial,
+  data = fra.small
+)
+
+summary(mod.match.re)
+
+preds.fe <- marginaleffects::avg_predictions(
+  mod.match.re,
+  by = "Candidate"
+) %>%
+  mutate(
+    Candidate = recode(
+      Candidate,
+      "EV_AH"  = "Hildago",  #10      centre
+      "EV_EM"  = "Macron",  #1        centre
+      "EV_EZ"  = "Zemmour", #4        extr right
+      "EV_FR"  = "Roussel", #8        extr left
+      "EV_JJ"  = "Lasalle",  #7?      NA 
+      "EV_JLM" = "Mélenchon", #3      extr left
+      "EV_MLP" = "Le Pen",  #2        extr right
+      "EV_NA"  = "Arthaud", #12       extr left
+      "EV_NDA" = "Dupont-Aignan", #9  extr right / centre
+      "EV_PP"  = "Poutou",  #11       extr left
+      "EV_VP"  = "Pecresse", #5       centre
+      "EV_YJ"  = "Jadot"  #6          centre
+    )
+  )
+
+
+ggplot(preds.fe,
+       aes(x = reorder(Candidate, estimate),
+           y = estimate,
+           ymin = conf.low,
+           ymax = conf.high)) +
+  geom_pointrange(linewidth = 0.5) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Predicted probability of agreement"
+  ) +
+  theme_bw(base_size = 24)
+ggsave("matchfigFrance.pdf", width = 16, height = 9)
