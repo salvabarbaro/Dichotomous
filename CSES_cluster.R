@@ -229,7 +229,7 @@ olsregs <- lapply(regmods.k2, olsfun)
 options("modelsummary_format_numeric_latex" = "plain")
 modelsummary::modelsummary(olsregs, 
   stars = T, 
-  gof_omit = "AIC|BIC|Log.|RMSE",
+#  gof_omit = "AIC|BIC|Log.|RMSE",
   coef_map = c(
     "polarization_parties" = "Party Polarization",
     "polarization_voter" = "Voter Polarization",
@@ -245,7 +245,7 @@ modelsummary::modelsummary(olsregs,
     ~ Country,
     ~ year,
     ~ Country + year),
-  output = "maike.tex",
+#  output = "maike.tex",
   conf_level = 0.95
 )
 
