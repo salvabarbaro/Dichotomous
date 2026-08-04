@@ -139,7 +139,7 @@ fv.fun <- function(i, df){
   silh.values <- fviz_nbclust(sc.rat, kmeans, ## alternative: pam
                               method = "silhouette", 
                               k.max = kmax.value)[["data"]][["y"]]
-  df.max <- data.frame(nbcluster = 1:(kmax.value),
+  df.max <- data.frame(nbcluster = 2:(kmax.value),
                        silh.scores = silh.values)
   optk <- df.max[,1][which.max(df.max[,2])]
   return(optk)
@@ -153,10 +153,16 @@ fv.fun <- function(i, df){
 ##################################################################################
 
 optclust.list <- mclapply(working.ids$id, fv.fun, 
-                          df = france_cluster.df, mc.cores = 8)
+                          df = france_cluster.df, mc.cores = 16)
+
+#optclust.list <- lapply(working.ids$id[1:5], fv.fun, 
+#                          df = france_cluster.df)
 
 optclust.df <- data.frame(id = working.ids$id, 
                           optk = unlist(optclust.list))
+## save the id - opt-k correspondence
+saveRDS(optclust.df, "DATA/optclustFRA.RDS")
+
 ## Data for the Table in Section 4
 table(optclust.df$optk) / nrow(optclust.df)
 ## Second Approach: Select the id's with kopt == 2 and check the silhouette scores
@@ -407,7 +413,7 @@ ols03 <- lm(formula = phi.value ~ optk2 + Age + Gender + Educ.lvl,
             data = fra.avg)
 gtsummary::tbl_regression(ols03)
 write.csv(fra.avg, "Data/OLSfra.csv", row.names = F)
-
+OLSfra <- read.csv("DATA/OLSfra.csv", header = T)
 
 
 ###### matching 
@@ -423,6 +429,9 @@ saveRDS(
 )
 ###########################################
 fra.small <- readRDS("DATA/france22small.RDS")
+fra.optk  <- readRDS("DATA/optclustFRA.RDS")
+fra.AE    <- fra.small %>%
+  left_join(x = ., y = fra.optk, by = "id")
 ###########################################
 ### log-reg approach
 mod.match <- glm(
@@ -521,3 +530,50 @@ ggplot(preds.fe,
   ) +
   theme_bw(base_size = 24)
 ggsave("matchfigFrance.pdf", width = 16, height = 9)
+
+
+## AE: In political elections, it is well-known that voters tend to fix their threshold strategically between the two leading candidates and as a result, I assume that approval ballots will tend to contain less candidates than the clustering-generated approval cluster (cf. R3's comment on framing effects). (This would be an interesting finding, by the way.)
+
+fra.temp <- fra.AE %>% 
+  mutate(
+    Approval = as.numeric(Approval), 
+    Cluster = as.numeric(Cluster)-1) %>%
+  group_by(id) %>%
+  reframe(
+    sum.app = sum(Approval), 
+    sum.clu = sum(Cluster),
+  optk = optk) %>%
+  distinct()
+sapply(fra.temp[,2:3], summary)
+
+fra.temp %>% group_by(optk) %>% summarise(mn.app = mean(sum.app, na.rm = T), mn.clu = mean(sum.clu, na.rm = T))
+
+fra.temp <- fra.temp %>%
+  mutate(diff = sum.app - sum.clu)
+m <- lm(diff ~ factor(optk), data = fra.temp)
+
+summary(m)
+car::Anova(m)
+
+### extended regression with pivot_longer df
+### This is the model described in the Paper (Footnote 2)
+
+long <- fra.temp %>%
+  pivot_longer(
+    c(sum.app, sum.clu),
+    names_to = "type",
+    values_to = "n_candidates"
+  ) %>%
+  mutate(
+    type = factor(
+      type,
+      levels = c("sum.app", "sum.clu")
+    ),
+    optk = factor(optk, levels = 2:6)
+  )
+
+m <- lme4::lmer(
+  n_candidates ~ type + factor(optk) + (1 | id),
+  data = long
+)
+summary(m)
