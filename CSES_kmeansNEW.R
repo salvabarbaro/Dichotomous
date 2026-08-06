@@ -141,3 +141,4 @@ cou.selection <- c("France_2012", "Germany_2021", "Great Britain_2019", "Israel_
 cou.table <- kmeans.res.new %>% filter(., case_ID %in% cou.selection) %>%
   dplyr::select(., c("case_ID", "k_2_pct", "k_3_pct", "k_4_pct")) 
 stargazer::stargazer(cou.table, summary = F)
+cou.table
