@@ -55,8 +55,10 @@ gc()      #
 
 optk_df <- readRDS("DATA/optkdf.RDS")   # generated through CSES_Cluster.R
 
+
+
 # join back to original data
-cses.all <- cses.df %>%
+cses.all <- cses.df %>% 
   left_join(optk_df, by = c("ID", "case_ID")) %>% 
   mutate(bin.k2 = ifelse(opt_k == 2, 1, 0))   # bin.k2 : LHS or the regressions
 

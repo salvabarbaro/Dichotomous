@@ -133,11 +133,17 @@ kmax.value <- 6  #
 
 fv.fun <- function(i, df){
   ro <- df %>% filter(., id %in% i)
-  epsilons <- sample(seq(-.1, .1, .001), 6, replace = F)
+  epsilons <- sample(
+  seq(-0.01, 0.01, 0.001),
+  length(ro$Rating),
+  replace = FALSE
+)
+#  epsilons <- sample(seq(-.1, .1, .001), 6, replace = F)
   rat.temp <- ro$Rating + epsilons
   sc.rat <- scale(rat.temp)
   silh.values <- fviz_nbclust(sc.rat, kmeans, ## alternative: pam
-                              method = "silhouette", 
+                              method = "silhouette",
+                              nstart = 25, 
                               k.max = kmax.value)[["data"]][["y"]]
   df.max <- data.frame(nbcluster = 2:(kmax.value),
                        silh.scores = silh.values)
@@ -153,7 +159,7 @@ fv.fun <- function(i, df){
 ##################################################################################
 
 optclust.list <- mclapply(working.ids$id, fv.fun, 
-                          df = france_cluster.df, mc.cores = 16)
+                          df = france_cluster.df, mc.cores = 12)
 
 #optclust.list <- lapply(working.ids$id[1:5], fv.fun, 
 #                          df = france_cluster.df)
@@ -162,6 +168,14 @@ optclust.df <- data.frame(id = working.ids$id,
                           optk = unlist(optclust.list))
 ## save the id - opt-k correspondence
 saveRDS(optclust.df, "DATA/optclustFRA.RDS")
+
+## zwischentest
+# alt: bisheriges optclust
+rob.test <- optclust.df %>% left_join(x = ., y = alt, by = "id")
+cor.test(rob.test$optk.x, rob.test$optk.y)
+
+ggplot(data = rob.test, aes(x = optk.x, y = optk.y)) + geom_point()
+
 
 ## Data for the Table in Section 4
 table(optclust.df$optk) / nrow(optclust.df)

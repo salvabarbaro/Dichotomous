@@ -11,6 +11,8 @@ library(tidyr)
 library(parallel)
 library(scales)
 library(latex2exp)
+library(fixest)
+library(modelsummary)
 #######################################################################################
 ## 1.  Read and prepare data
 #######################################################################################
@@ -25,12 +27,14 @@ cses.df <- cses_imd %>%
          C.SocEconStatus = IMD2016,
          C.Ideology = IMD3006,
          C.SatisfDem = IMD3010,
+         C.SatDem = IMD3010,    # the same as C.SatisfDem
          C.ElectSystem = IMD5013,
          C.NbEffParties = IMD5058_1,
          C.case_ID = paste(IMD1006_NAM, IMD1008_YEAR, sep = "_")
         ) %>% 
   dplyr::select(starts_with("C.")) %>%
   mutate(
+    ID = C.ID,
     Age = ifelse(C.Age > 99, NA, as.numeric(C.Age)),
     Gender = factor(case_when(
       C.Gender == 1 ~ "M",
@@ -38,13 +42,33 @@ cses.df <- cses_imd %>%
       TRUE ~ NA_character_  )),
     Education = ifelse(C.Education > 4, NA, as.factor(C.Education) ),
     Income = ifelse(C.Income > 5, NA, as.factor(C.Income)),
+    IncomeQ = ifelse(C.Income > 5, NA, as.factor(C.Income)),
     Ideology =  ifelse(C.Ideology > 10, NA, C.Ideology),
     Dissatisfaction = ifelse(C.SatisfDem >5, NA, as.factor(C.SatisfDem)),
+    SatisfactionDem = case_when(
+      C.SatDem == 5 ~ 1,   # not at all satisfied
+      C.SatDem == 4 ~ 2,   # not very satisfied
+      C.SatDem == 6 ~ 3,   # neither nor
+      C.SatDem == 2 ~ 4,   # fairly satisfied
+      C.SatDem == 1 ~ 5,   # very satisfied
+      TRUE ~ NA_real_
+    ),
     ElectSystem = ifelse(C.ElectSystem == 9, NA, as.factor(C.ElectSystem)),
     NbEffParties  = ifelse(C.NbEffParties > 100, NA, as.numeric(C.NbEffParties)),
     case_ID = C.case_ID,
-    Country = cses_imd$IMD1006_UNALPHA3
-  )
+    Country = cses_imd$IMD1006_UNALPHA3,
+    Year = as.character(cses_imd$IMD1008_YEAR),
+    case_ID = paste(Country, Year, sep = "_")
+  ) %>%
+  mutate(
+    across(
+      starts_with("IMD3008_"),
+      ~ ifelse(.x < 11, .x, NA),
+      .names = "party_rating_{tolower(sub('IMD3008_', '', .col))}"
+    )) %>%
+  mutate(Dist0 = abs(Ideology - 5)) %>%
+  mutate(DistSq = Dist0^2) 
+
 #
 # The second cses-data is taken from Barbaro/Kurella: Condorcet Paradox (Public Choice)
 #https://cses.org/wp-content/uploads/2024/02/cses_imd_codebook_part2_variables.txt
@@ -232,8 +256,6 @@ cou.table <- new_kmeans %>% filter(., case_ID %in% cou.selection) %>%
   dplyr::select(., -c("case_ID")) %>%
   setNames(c("Country", "Year", "k=2", "k=3", "k=4"))
 
-
-
 kableExtra::kbl(
   cou.table,
   format = "latex",
@@ -276,10 +298,12 @@ gc()
 ##################################################################
 ### Regression: Can we explain the share of k2?
 ## Polarization data
-polariz.df <- readRDS(file = "polarization.RDS")
+polariz.df <- readRDS(file = "polarization.RDS") 
 # adding polarization data to cses.df
 cses.df <- cses.df %>% 
-  left_join(x = ., y = polariz.df, by = "case_ID") %>%
+  rename("caseIDiso3c" = "case_ID") %>%
+  rename("case_ID" = "C.case_ID")   %>%
+  left_join(x = ., y = polariz.df, by = "case_ID") %>%   
   left_join(x = ., y = new_kmeans, by = "case_ID")
 
 cses.ols <- cses.df %>% 
@@ -379,11 +403,11 @@ modelsummary(
 ###############################################################################################
 #### Regressions
 #### Mikro-Level
-optk_df <- readRDS("DATA/optkdf.RDS")   # generated through CSES_Cluster.R
+optk_df <- readRDS("DATA/optkdf.RDS") # generated through the cluster function above
 
 # join back to original data
-cses.all <- cses.df %>% rename("ID" = "C.ID") %>%
-  left_join(x = ., y = optk_df, by = c("ID", "case_ID")) %>% 
+cses.all <- cses.df  %>%
+  left_join(x = ., y = optk_df, by = c("case_ID", "ID")) %>% 
   mutate(bin.k2 = ifelse(opt_k == 2, 1, 0))   # bin.k2 : LHS or the regressions
 
 #### cses.all: the dataset for the regressions
@@ -401,13 +425,47 @@ mod01.both <- "bin.k2 ~ Dist0 + SatisfactionDem + Age + Gender + Education + Inc
 
 
 feDist.fun <- function(m){
-  feglm(
+  fixest::feglm(
  fml = as.formula(m),
   family = binomial(link = "logit"),
-  data   = cses.all
-)
-}
+  data   = cses.all  )}
 
-#mikroregs <- lapply()
+micromodels <- list(
+  "Main" = mod01, 
+  "Alt.01" = mod02, 
+  "Alt.02" = mod03, 
+  "Alt.03" = mod04, 
+  "Alt.04" = mod05, 
+  "Satisf." = mod01.sat, 
+  "Both" = mod01.both)
 
-modelsummary()
+DistReg <- lapply(micromodels, feDist.fun)
+
+coef_map = c(
+    "SatisfactionDem" = "Satisf. Democracy",
+    "IncomeQ" = "Income",
+    "Education" = "Education",
+    "GenderM" = "Gender (Male)",
+    "Age" = "Age",
+    "Dist0" = "Ideology")
+
+
+modelsummary(
+  DistReg, 
+  exponentiate = T,
+  stars = T,
+  statistic = '[{conf.low}, {conf.high}]',
+  gof_omit = "R2|RMSE",
+  vcov = ~case_ID, 
+  coef_map = coef_map)
+
+modelplot(
+  DistReg, 
+  exponentiate = T,
+  vcov = ~case_ID,
+  coef_map = coef_map,
+  conf_level = 0.99
+) + theme_bw(base_size = 22) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  scale_colour_viridis_d()
+ggsave("microregressions.pdf", width = 16, height = 9)
