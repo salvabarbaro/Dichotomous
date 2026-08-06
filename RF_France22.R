@@ -577,3 +577,40 @@ m <- lme4::lmer(
   data = long
 )
 summary(m)
+
+## for publication: 
+coef_labels <- c(
+  "(Intercept)"   = "Constant",
+  "typesum.clu"   = "Cluster-implied approval set",
+  "factor(optk)3" = "Optimal clusters: $k=3$",
+  "factor(optk)4" = "Optimal clusters: $k=4$",
+  "factor(optk)5" = "Optimal clusters: $k=5$",
+  "factor(optk)6" = "Optimal clusters: $k=6$"
+)
+
+modelsummary(m, stars = T)
+
+
+options("modelsummary_format_numeric_latex" = "plain")
+modelsummary(
+  list("Number of candidates" = m),
+  coef_map = coef_labels,
+  estimate  = "{estimate}",
+  statistic = "({std.error})",
+  fmt = 3,
+  gof_map = c(
+    "nobs",
+    "groups",
+    "var.ranef.id",
+    "var.residual"
+  ),
+  stars = TRUE,
+  title = "Comparison of Observed and Cluster-Implied Approval Sets",
+  notes = paste(
+    "Notes: Linear mixed-effects model estimated by restricted maximum",
+    "likelihood. Standard errors are reported in parentheses.",
+    "The reference categories are the observed approval ballot and $k=2$."
+  ),
+  escape = FALSE,
+  output = "latex"
+)

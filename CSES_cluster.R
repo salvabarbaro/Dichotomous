@@ -206,7 +206,8 @@ cses.ols <- readRDS("DATA/csesOLS.RDS") %>%
 #cses.ols <- cses.ols %>% left_join(
 #  x = ., y = vdem, by = c("Country" = "iso3c")
 #)
-
+cses.ols <- cses.ols %>%
+  mutate(year = as.integer(stringr::str_extract(case_ID, "\\d{4}$")))
 
 #### Regressions
 ## models
@@ -269,8 +270,65 @@ modelsummary::modelplot(
     ~ Country,
     ~ year,
     ~ Country + year),
-  conf_level = 0.95
-) + theme_bw(base_size = 28) + 
+  conf_level = 0.9
+) + theme_bw(base_size = 22) + 
   scale_color_viridis_d() + 
   geom_vline(xintercept = 0, linetype = "dashed")
 ggsave(filename= "k2OLS.pdf", width = 16, height = 8)
+
+
+## shorter version
+modelsummary::modelplot(
+  olsregs[4:5],
+  coef_omit = "Intercept",
+  coef_map = c(
+    "polarization_parties" = "Party Polarization",
+    "polarization_voter" = "Voter Polarization",
+    "NbEffParties" = "Nb. Eff. Parties",
+    "factor(ElectSystem)2" = "ElecSys-Proport.",
+    "factor(ElectSystem)3" = "ElecSys-Mixed",
+    "year" = "Time",
+    "Country" = "Country" ),
+  vcov = list(
+#    ~ Country,
+#    ~ Country,
+#    ~ Country,
+    ~ year,
+    ~ Country + year),
+  conf_level = 0.9
+) + theme_bw(base_size = 22) + 
+  scale_color_viridis_d() + 
+  geom_vline(xintercept = 0, linetype = "dashed")
+
+
+hc3.ols <- estimatr::lm_robust(
+  formula = k_2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + Country + year,
+  data = cses.ols, 
+  se_type = "HC1"
+)
+summary(hc3.ols)
+
+
+library(fixest)
+fe.01 <- feols(
+  fml = k_2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties | Country + year,
+  data = cses.ols,
+  vcov = "HC1"
+)
+summary(fe.01)
+
+fe.02 <- feols(
+  fml = k_2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties | Country + year,
+  data = cses.ols,
+  vcov = ~Country
+)
+summary(fe.02)
+
+fe.03 <- feols(
+  fml = k_2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties | Country + year,
+  data = cses.ols,
+  vcov = ~Country + year
+)
+summary(fe.03)
+
+modelsummary::modelsummary(list(fe.01, fe.02, fe.03), stars = T)
