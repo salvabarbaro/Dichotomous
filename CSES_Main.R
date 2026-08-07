@@ -72,6 +72,7 @@ cses.df <- cses_imd %>%
 #
 # The second cses-data is taken from Barbaro/Kurella: Condorcet Paradox (Public Choice)
 #https://cses.org/wp-content/uploads/2024/02/cses_imd_codebook_part2_variables.txt
+
 cses <- read.csv("DATA/cses.csv", header = T)
 ## Approach: we consider only individuals who rated at least six parties.
 ## Given this restriction, we consider only elections with at least 100 individuals
@@ -203,7 +204,7 @@ case_ids <- unique(cs_p.df$case_ID)
 
 # Use lapply to get list of data frames
 res.list <- mclapply(
-  case_ids,
+  case_ids[1:5],
   function(case_id) {
     fv.kmeans.per.id(
       case_id,

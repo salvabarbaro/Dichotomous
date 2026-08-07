@@ -1,6 +1,6 @@
 #### Replication file to
-#### Dichotomous Preferences...
-#### by Barbaro and Kurella
+#### Dichotomous Preferences: Concepts, Measurement, and Evidence
+#### by Salvatore Barbaro and Anna-Sophie Kurella
 #### This replication file covers all analyses with the CSES dataset
 #### Section 5
 ######################################################################################
@@ -69,16 +69,21 @@ cses.df <- cses_imd %>%
   mutate(Dist0 = abs(Ideology - 5)) %>%
   mutate(DistSq = Dist0^2) 
 
+## clean-up
+rm(cses_imd)
+gc()
 #
 # The second cses-data is taken from Barbaro/Kurella: Condorcet Paradox (Public Choice)
+## It effectively uses the same cses_imd as above and renames the variables regarding
+## party ratings. Please find cses at the github-repo 
+## https://github.com/salvabarbaro/CondorcetCycle/tree/main/Data
 #https://cses.org/wp-content/uploads/2024/02/cses_imd_codebook_part2_variables.txt
-cses <- read.csv("DATA/cses.csv", header = T)
+cses <- readRDS("DATA/cses.RDS")
 ## Approach: we consider only individuals who rated at least six parties.
 ## Given this restriction, we consider only elections with at least 100 individuals
 ## This effectively removes case_IDs with only few parties considered. 
 ## Effects: 212.729 participants, 172 elections. 
 cs_p.df <- cses %>% 
-  dplyr::select(-starts_with("candidate_rating")) %>%
   pivot_longer(cols = starts_with("party_rating")) %>% 
   dplyr::rename(Rating = value) %>%
   group_by(case_ID, id) %>%
@@ -87,6 +92,11 @@ cs_p.df <- cses %>%
   group_by(case_ID) %>%
   filter(n_distinct(id) >= 100) %>%
   ungroup()
+
+# clean-up
+rm(cses)
+gc()
+
 #
 length(unique(cs_p.df$case_ID))  # number of elections
 length(unique(cs_p.df$id))       # number of respondents
@@ -146,7 +156,7 @@ kmeans.id <- function(df_id, kmax = k_max, nstart = nb_iter) {
 
   ks <- 2:kmax
 
-  # Distanzmatrix nur einmal berechnen
+  # distance matrix
   d <- dist(x)
 
   fits <- lapply(ks, function(k) {
@@ -214,6 +224,7 @@ cluster.short <- cluster.df %>% dplyr::select(., c("id", "opt_k", "case_ID")) %>
 cluster.short %>%
   count(id) %>%
   count(n)
+# test of consistency - end 
 
 cou.table <- cluster.short %>%
   mutate(
@@ -235,6 +246,7 @@ cou.table <- cluster.short %>%
 
 cou.selection <- c("France_2012", "Germany_2021", "Great Britain_2019", "Israel_2020", "Japan_2017", "Tunisia_2019")
 
+## some examples
 cou.appendixtable <- cou.table %>% dplyr::filter(., case_ID %in% cou.selection) %>%
   dplyr::select(., c("case_ID", "k2_pct", "k3_pct", "k4_pct")) %>%
   tidyr::extract(
@@ -246,9 +258,34 @@ cou.appendixtable <- cou.table %>% dplyr::filter(., case_ID %in% cou.selection) 
   mutate(Year = as.integer(Year)) %>%
   dplyr::select(., -c("case_ID")) %>%
   setNames(c("Country", "Year", "k=2", "k=3", "k=4"))
+#
+# all countries
+cou.fulltable <- cou.table %>% 
+  dplyr::select(., c("case_ID", "k2_pct", "k3_pct", "k4_pct")) %>%
+  tidyr::extract(
+    case_ID,
+    into = c("Country", "Year"),
+    regex = "^(.*)_([0-9]{4})$",
+    remove = FALSE
+  ) %>%
+  mutate(Year = as.integer(Year)) %>%
+  dplyr::select(., -c("case_ID")) %>%
+  setNames(c("Country", "Year", "k=2", "k=3", "k=4"))
+
 
 kableExtra::kbl(
   cou.appendixtable,
+  format = "latex",
+  booktabs = TRUE,
+  digits = 2,
+  label = "tb.csesexamples",
+  caption = "Results from some selected countries/elections", 
+  linesep = NULL
+)
+
+# for the appendix: long table
+kableExtra::kbl(
+  cou.fulltable,
   format = "latex",
   booktabs = TRUE,
   digits = 2,
@@ -282,8 +319,6 @@ p1 <- ggplot(res_long, aes(x = k_type, y = percent)) +
 ggsave("cses169.pdf", plot = p1, width = 16, height = 8)
 rm(p1, res_long)
 gc()
-
-
 #################################################################
 ## 3. Regression
 ##################################################################
@@ -303,7 +338,6 @@ cses.ols <- cses.df %>%
   "polarization_parties", "polarization_voter")) %>%
   unique() %>%
   mutate(year = as.integer(stringr::str_extract(case_ID, "\\d{4}$")))
-
 
 regmods.k2 <- list(
   "Main" = "k2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + year",
@@ -333,8 +367,8 @@ modelsummary::modelsummary(olsregs,
     ~ Country,
     ~ Country,
     ~ Country + year),
-  gof_omit = "AIC|BIC|Log.|RMSE"#, 
-#  output = "k2ols.tex"
+  gof_omit = "AIC|BIC|Log.|RMSE", 
+  output = "k2ols.tex"
 )
 
 cses.cre <- cses.ols %>%
@@ -382,7 +416,73 @@ coef_map = c(
 modelsummary(
   m.cre, stars = T,
   gof_map = gof_map,
-  coef_map = coef_map
+  coef_map = coef_map,
+  output = "Mundlak.tex"
 )
 ################################################
 # Micro-Level
+optk_df <- cluster.short %>% rename(ID = id)
+cses.all <- cses.df  %>%
+  left_join(x = ., y = optk_df, by = c("case_ID", "ID")) %>% 
+  mutate(bin.k2 = ifelse(opt_k == 2, 1, 0))   # bin.k2 : LHS or the regressions
+
+#
+### models with Dist0 as main variable, 
+mod01 <- "bin.k2 ~ Dist0 + Age + Gender + Education + IncomeQ | case_ID"
+mod02 <- "bin.k2 ~ Dist0 + Age + Gender | case_ID"
+mod03 <- "bin.k2 ~ Dist0 + Age + IncomeQ | case_ID"
+mod04 <- "bin.k2 ~ Dist0 + Education + IncomeQ   | case_ID"
+mod05 <- "bin.k2 ~ Dist0  | case_ID"
+#############################################
+## Robustness Check: We replace Dist0 with SatisfactionDem in mod01
+mod01.sat <- "bin.k2 ~ SatisfactionDem + Age + Gender + Education + IncomeQ | case_ID"
+mod01.both <- "bin.k2 ~ Dist0 + SatisfactionDem + Age + Gender + Education + IncomeQ | case_ID"
+
+
+feDist.fun <- function(m){
+  fixest::feglm(
+ fml = as.formula(m),
+  family = binomial(link = "logit"),
+  data   = cses.all  )}
+
+micromodels <- list(
+  "Main" = mod01, 
+  "Alt.01" = mod02, 
+  "Alt.02" = mod03, 
+  "Alt.03" = mod04, 
+  "Alt.04" = mod05, 
+  "Satisf." = mod01.sat, 
+  "Both" = mod01.both)
+
+DistReg <- lapply(micromodels, feDist.fun)
+
+coef_map = c(
+    "SatisfactionDem" = "Satisf. Democracy",
+    "IncomeQ" = "Income",
+    "Education" = "Education",
+    "GenderM" = "Gender (Male)",
+    "Age" = "Age",
+    "Dist0" = "Ideology")
+
+
+modelsummary(
+  DistReg, 
+  exponentiate = T,
+  stars = T,
+  conf_level = 0.9,
+  statistic = '[{conf.low}, {conf.high}]',
+  gof_omit = "R2|RMSE",
+  vcov = ~case_ID, 
+  coef_map = coef_map)
+
+modelplot(
+  DistReg, 
+  exponentiate = T,
+  vcov = ~case_ID,
+  coef_map = coef_map,
+  conf_level = 0.99
+) + theme_bw(base_size = 22) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  scale_colour_viridis_d()
+ggsave("microregressions.pdf", width = 16, height = 9)
+###################################################################################################################################
