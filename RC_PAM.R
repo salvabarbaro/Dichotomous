@@ -176,3 +176,6 @@ ggplot(common.df, aes(x = kmeans, y = pam)) +
   ) +
   theme_bw(base_size = 20)
 ggsave("PAMkmeansCompare.pdf", width = 16, height = 9)
+
+
+##### test
