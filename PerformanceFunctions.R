@@ -8,7 +8,9 @@ library(tidyverse)
 library(cluster)
 library(factoextra)
 library(tidyr)
-library(parallel)
+#library(parallel)
+library(future)
+library(future.apply)
 library(scales)
 library(latex2exp)
 library(fixest)
@@ -210,13 +212,26 @@ split.df <- split(
   )
 )
 
-res <- parallel::mclapply(
+future::plan(
+  future::multisession,
+  workers = nb.cores
+)
+
+res <- future.apply::future_lapply(
   split.df,
   kmeans.id,
   kmax = 4,
   nstart = 25,
-  mc.cores = nb.cores
+  future.seed = TRUE
 )
+
+#res <- parallel::mclapply(
+#  split.df,
+#  kmeans.id,
+#  kmax = 4,
+#  nstart = 25,
+#  mc.cores = nb.cores
+#)
 
 cluster.df <- dplyr::bind_rows(res)
 cluster.short <- cluster.df %>% dplyr::select(., c("id", "opt_k", "case_ID")) %>% distinct()
@@ -367,8 +382,8 @@ modelsummary::modelsummary(olsregs,
     ~ Country,
     ~ Country,
     ~ Country + year),
-  gof_omit = "AIC|BIC|Log.|RMSE", 
-  output = "k2ols.tex"
+  gof_omit = "AIC|BIC|Log.|RMSE"#, 
+#  output = "k2ols.tex"
 )
 
 cses.cre <- cses.ols %>%
@@ -416,8 +431,8 @@ coef_map = c(
 modelsummary(
   m.cre, stars = T,
   gof_map = gof_map,
-  coef_map = coef_map,
-  output = "Mundlak.tex"
+  coef_map = coef_map#,
+#  output = "Mundlak.tex"
 )
 ################################################
 # Micro-Level
