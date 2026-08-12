@@ -2,25 +2,18 @@ library(dplyr)
 library(cluster)
 library(factoextra)
 library(ggplot2)
-#library(ineq)
-#library(dineq)
-#library(rstatix)
 library(tidyr)
-#library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
 library(parallel)
-#library(gtsummary)
 library(modelsummary)
-#library(rlang)
 
-## Read Data  (see Merge.R in Data/France22/)
 france22.df <- read.csv("DATA/France22.csv", header = T)
 ###
+## Data summary (Supplementary Material)
 modelsummary::datasummary(
   All(france22.df) ~ N + Mean + SD + Min + Median + Max,
   data = france22.df#,
 #  output = "france22_summary.tex"
 )
-
 
 scale_to_range <- function(x, new_min, new_max) {
   old_min <- min(x, na.rm = T)
@@ -29,21 +22,12 @@ scale_to_range <- function(x, new_min, new_max) {
   return(scaled_x)
 }
 
-ids.right <- c("Eric Zemmour", "Marine Le Pen", "Nicolas Dupont-Aignan")
-ids.left  <- c("Jean-Luc Mélenchon", "Nathalie Artaud", "Philippe Poutou", "Fabien Roussel")
-extr.France22 <- france22.df %>% 
-  mutate(ext.right = ifelse(plurality %in% ids.right, 1, 0),
-         ext.left  = ifelse(plurality %in% ids.left,  1, 0)) %>%
-  select(., c("id", starts_with("ext.")))
-write.csv(extr.France22, "extrFR22.csv", row.names = F)
-rm(ids.right, ids.left, extr.France22)
-
 france_long.df <- france22.df %>%
   select(id, starts_with("AV_"), starts_with("EV_"))  %>%
   pivot_longer(cols = starts_with("EV_"), names_to = "Candidate", values_to = "Approval") %>%
   pivot_longer(cols = starts_with("AV_"), names_to = "Approval_Candidate", values_to = "Rating") %>%
-  filter(substring(Candidate, 3) == substring(Approval_Candidate, 3)) #%>%  # Ensure candidate names match 
-#  mutate(Rating = ifelse(Rating ==50, NA, Rating))    ## robustness check: convert 50 to NA
+  filter(substring(Candidate, 3) == substring(Approval_Candidate, 3)) %>%  # Ensure candidate names match 
+  mutate(Rating = ifelse(Rating ==50, NA, Rating))    ## robustness check: convert 50 to NA
 
 # Transformation... - apply function
 newratings <- scale_to_range(x = france_long.df$Rating, 2,3)
@@ -58,77 +42,8 @@ france_cluster.df <- france_theil.df %>%
   ungroup()
 ###
 #######################################################
-### Section 3: Decomposition analysis
-load("AuxFunctions.RData")
-ic2res <- mclapply(unique(france_theil.df$id), ic2decomp.fun, data = france_theil.df, mc.cores = 8)
-ic2res.df <- ic2res %>% do.call(rbind, .) %>%
-  mutate(WDP.Theil = ifelse(Theil.within < Theil.between, 1, 0),
-         WDP.Gini =  ifelse(Gini.within < Gini.between, 1, 0),
-         WDP.Atkinson = ifelse(Atkinson.within < Atkinson.between, 1, 0),
-         WDP.SCV = ifelse(SCV.within < SCV.between, 1, 0)
-#         WDP.VAR = ifelse(VAR.within < VAR.between, 0, 1)
-#         WDP.MLD = ifelse(MLD.within < MLD.between, 1, 0)
-        )
-#head(ic2res.df)
-## Store ID's with WDP in reg.france [for Section on Socio-Demographics]
-reg.france <- france22.df %>% 
-  select(., c("id", "Gender", "Age", "studies")) %>%
-  left_join(x = ., 
-            y = ic2res.df %>% select(., c("id", "WDP.Theil", "WDP.Gini", "WDP.Atkinson")),
-            by = "id")
-#write.csv(reg.france, "DATA/regfrance.csv", row.names = F)
-
-
-## Values for Table 2:
-compute_wdp_shares(ic2res.df)
-####################################################################
-## Bootstrap
-# Custom bootstrapping function  [clustered BOOTSTRAP, do not confuse with the cluster analysis]
-cluster_bootstrap <- function(df, id_col, R = 1000) {
-  unique_ids <- unique(df[[id_col]])  # Unique id values
-  boot_results <- matrix(NA, nrow = R, ncol = 4)  # Store bootstrap results
-  
-  for (r in 1:R) {
-    sampled_ids <- sample(unique_ids, replace = TRUE)  # Resample IDs
-    boot_df <- df %>% filter(id %in% sampled_ids)  # Extract corresponding rows
-    
-    boot_results[r, ] <- compute_wdp_shares(boot_df)  # Compute WDP shares
-  }
-  
-  colnames(boot_results) <- c("Theil", "Gini", "Atkinson", "SCV")
-  return(as.data.frame(boot_results))
-}
-
-# Running the clustered bootstrap
-set.seed(55234)  
-boot_results <- cluster_bootstrap(ic2res.df, id_col = "id", R = 1000)
-# Compute confidence intervals by percentile method
-apply(boot_results, 2, quantile, probs = c(0.025, 0.975))  # 95% CI
-############################################################################
-## Robustness Check according to the proposed method by Fleurbaey, Lambert,... 
-out1 <- fleurbaey_pipeline(france_theil.df)
-
-# With your external table ic2res.df (must have columns id and Gini.between):
-out2 <- fleurbaey_pipeline(
-  data = france_theil.df,
-  join_df = ic2res.df,
-  id_col = "id",
-  income_col = "Rating",
-  group_col = "Approval",
-  join_id_col = "id",
-  join_between_col = "BM.between"
-)
-
-#out2$res_ids
-#out2$fleurbaey
-out2$wdp_table
-#out2$resnew_summ
-rm(boot_results, ic2res, ic2res.df, france_long.df, cv_decomp_bm)
-
-
-
 ##########################################################################
-### SECTION 4: Cluster Analysis
+### SECTION 5: Cluster Analysis
 ## Cluster analysis
 # Step 1: We remove all id's without variance in the Rating
 # Function working.ids selects the appropriate id-values 
@@ -165,8 +80,8 @@ fv.fun <- function(i, df){
 # 0.45193370 0.29060773 0.16685083 0.06298343 0.02762431 France22
 ##################################################################################
 
-optclust.list <- mclapply(working.ids$id, fv.fun, 
-                          df = france_cluster.df, mc.cores = 12)
+optclust.list <- lapply(working.ids$id, fv.fun, 
+                          df = france_cluster.df)
 
 #optclust.list <- lapply(working.ids$id[1:5], fv.fun, 
 #                          df = france_cluster.df)
@@ -319,6 +234,8 @@ working.ids <- france_cluster.df %>%
 france01 <- lapply(unique(working.ids$id), 
                      FUN = rowwise.kmeans.fun, 
                      df = france_cluster.df)
+
+france01.df <- dplyr::bind_rows(france01)
 
 ## start: cluster number transformation
 ## "1": approved, "2" disapproved. We transform this to 0: disapproved, 1: approved 

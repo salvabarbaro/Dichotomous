@@ -1,3 +1,6 @@
+## This file calulates the optimal cluster number/assignements based on PAM instead of 
+## k-means. 
+
 nb.cores <- 18
 
 ## Define the max number of clusters
