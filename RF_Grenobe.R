@@ -35,6 +35,20 @@ ids.radleft_gre  <- grenoble.df$id[grenoble.df$OFFIC %in% ext.left]
 #write.csv(ids.radleft_gre,  "idsradleftgre.csv", row.names = F)
 rm(ids.radleft_gre, ids.radright_gre, ext.left, ext.rights)
 
+## data description
+options("modelsummary_format_numeric_latex" = "plain")
+modelsummary::datasummary_skim(
+  grenoble.df,
+  output = "grenoble_summary.tex") 
+
+modelsummary::datasummary(
+  All(grenoble.df) ~ N + Mean + SD + Min + Median + Max,
+  data = grenoble.df,
+  output = "grenoble_summary.tex"
+)
+
+
+
 grenoble_theil.df <- grenoble.df %>%
 #  rename(temp1 = AV_OPINION, temp2 = EV_OPINION) %>%
   select(id, starts_with("AV_"), starts_with("EV_"))  %>%
@@ -394,8 +408,8 @@ ggplot(preds,
     x = NULL,
     y = "Predicted probability of agreement"
   ) +
-  theme_bw(base_size = 24)
-
+  theme_bw(base_size = 20)
+ggsave("SuppPredsGreno.pdf", width = 16, height = 9)
 
 
 

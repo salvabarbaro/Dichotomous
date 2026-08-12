@@ -15,6 +15,13 @@ library(modelsummary)
 ## Read Data  (see Merge.R in Data/France22/)
 france22.df <- read.csv("DATA/France22.csv", header = T)
 ###
+modelsummary::datasummary(
+  All(france22.df) ~ N + Mean + SD + Min + Median + Max,
+  data = france22.df#,
+#  output = "france22_summary.tex"
+)
+
+
 scale_to_range <- function(x, new_min, new_max) {
   old_min <- min(x, na.rm = T)
   old_max <- max(x, na.rm = T)
@@ -467,11 +474,11 @@ preds <- preds %>%
   mutate(
     Candidate = recode(
       Candidate,
-      "EV_AH"  = "Hildago",  #10      centre
+      "EV_AH"  = "Hidalgo",  #10      centre
       "EV_EM"  = "Macron",  #1        centre
       "EV_EZ"  = "Zemmour", #4        extr right
       "EV_FR"  = "Roussel", #8        extr left
-      "EV_JJ"  = "Lasalle",  #7?      NA 
+      "EV_JJ"  = "Lassalle",  #7?      NA 
       "EV_JLM" = "Mélenchon", #3      extr left
       "EV_MLP" = "Le Pen",  #2        extr right
       "EV_NA"  = "Arthaud", #12       extr left

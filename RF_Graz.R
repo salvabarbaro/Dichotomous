@@ -7,13 +7,15 @@ library(dplyr)
 library(cluster)
 library(factoextra)
 library(ggplot2)
-library(ineq)
-library(dineq)
+#library(ineq)
+#library(dineq)
 library(rstatix)
 library(tidyr)
-library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
-library(parallel)
-library(gtsummary)
+#library(IC2)  # use remotes::install_version("IC2"), the library is no longer maintained.
+#library(parallel)
+library(future)
+library(future.apply)
+#library(gtsummary)
 library(modelsummary)
 library(rlang)
 library(readxl)
@@ -56,6 +58,12 @@ austria.df <- readxl::read_excel("DATA/Steirische_LTW_2019_Daten_Barbaro.xlsx") 
          Trich.Green = Q6_4,
          Trich.KPÖ = Q6_5,
          Trich.NEOS = Q6_6)
+
+modelsummary::datasummary(
+  All(austria.df) ~ N + Mean + SD + Min + Median + Max,
+  data = austria.df,
+  output = "austria_summary.tex"
+)
 
 # extremistic
 extr.df <- austria.df %>% 
@@ -178,30 +186,110 @@ rm(boot_results, ic2res, ic2res.df, bm_between_vec, cluster_bootstrap, compute_w
 ## present: austria_cluster.df
 # Step 1: We remove all id's without variance in the Rating
 # Function working.ids selects the appropriate id-values 
-working.ids <- austria_cluster.df %>% 
-  group_by(id) %>% 
-  reframe(l = var(Rating, na.rm = T)) %>%
-  filter(., l > 0) 
-kmax.value <- 5  # for Graz, 10 for Grenoble
+nb.cores <- 18
+k_max <- 5
+nb_iter <- 25
 
-fv.fun <- function(i, df){
-  ro <- df %>% filter(., id %in% i)
-  epsilons <- sample(seq(-.1, .1, .001), 6, replace = F)
-  rat.temp <- ro$Rating + epsilons
-  sc.rat <- scale(rat.temp)
-  silh.values <- fviz_nbclust(sc.rat, kmeans, 
-                              method = "silhouette", 
-                              k.max = kmax.value)[["data"]][["y"]]
-  df.max <- data.frame(nbcluster = 1:(kmax.value),
-                       silh.scores = silh.values)
-  optk <- df.max[,1][which.max(df.max[,2])]
-  return(optk)
+set.seed(55234)
+
+kmeans.id.graz <- function(df_id, kmax = k_max, nstart = nb_iter) {
+
+  df_id <- df_id %>%
+    dplyr::filter(
+      !is.na(Rating),
+      is.finite(Rating)
+    )
+
+  ratings <- df_id$Rating
+
+  # Mindestvoraussetzungen
+  if (
+    length(ratings) < 6 ||
+    length(unique(ratings)) < kmax ||
+    !is.finite(sd(ratings)) ||
+    sd(ratings) == 0
+  ) {
+    return(NULL)
+  }
+
+  x <- matrix(ratings, ncol = 1)
+
+  ks <- 2:kmax
+
+  # Distanzmatrix nur einmal pro Person berechnen
+  d <- dist(x)
+
+  fits <- lapply(ks, function(k) {
+
+    km <- stats::kmeans(
+      x,
+      centers = k,
+      nstart = nstart
+    )
+
+    sil <- mean(
+      cluster::silhouette(
+        km$cluster,
+        d
+      )[, "sil_width"]
+    )
+
+    list(
+      k = k,
+      fit = km,
+      silhouette = sil
+    )
+  })
+
+  sil_values <- vapply(
+    fits,
+    function(z) z$silhouette,
+    numeric(1)
+  )
+
+  best <- which.max(sil_values)
+
+  opt_k <- fits[[best]]$k
+  final_fit <- fits[[best]]$fit
+
+  df_id %>%
+    mutate(
+      opt_k = opt_k,
+      cluster = final_fit$cluster,
+      cluster_center =
+        final_fit$centers[final_fit$cluster, 1]
+    )
 }
 
-optclust.list <- mclapply(working.ids$id, fv.fun, 
-                          df = austria_cluster.df, mc.cores = 14)
-optclust.df <- data.frame(id = working.ids$id, 
-                          optk = unlist(optclust.list))
+split.graz <- split(
+  austria_cluster.df,
+  austria_cluster.df$id
+)
+
+future::plan(
+  future::multisession,
+  workers = nb.cores
+)
+
+res.graz <- future.apply::future_lapply(
+  split.graz,
+  kmeans.id.graz,
+  kmax = 5,
+  nstart = 25,
+  future.seed = TRUE
+)
+
+optclust.df <- dplyr::bind_rows(res.graz)
+optclust.df <- optclust.df %>%
+  mutate(approval_cluster = as.numeric(cluster)-1) %>%
+  mutate(match = ifelse(Approval == approval_cluster, 1, 0))
+
+# overall match:
+
+#optclust.list <- lapply(working.ids$id, fv.fun, 
+#                          df = austria_cluster.df)
+#optclust.df <- data.frame(id = working.ids$id, 
+#                          optk = unlist(optclust.list))
 ## Data for the Table in Section 4
 prop.table(table(optclust.df$optk))
 
