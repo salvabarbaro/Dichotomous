@@ -75,12 +75,23 @@ cses.df <- cses_imd %>%
 rm(cses_imd)
 gc()
 #
-# The second cses-data is taken from Barbaro/Kurella: Condorcet Paradox (Public Choice)
+# The second cses-data is taken from Barbaro/Kurella: Condorcet Paradox (Public Choice 2026)
 ## It effectively uses the same cses_imd as above and renames the variables regarding
 ## party ratings. Please find cses at the github-repo 
 ## https://github.com/salvabarbaro/CondorcetCycle/tree/main/Data
 #https://cses.org/wp-content/uploads/2024/02/cses_imd_codebook_part2_variables.txt
 cses <- readRDS("DATA/cses.RDS")
+# number of parties per election
+parties.df <- cses %>%
+  group_by(case_ID) %>%
+  summarise(
+    n_parties = sum(
+      across(starts_with("party_rating_"),
+             ~ any(!is.na(.x)))
+    ),
+    .groups = "drop"
+  )
+
 ## Approach: we consider only individuals who rated at least six parties.
 ## Given this restriction, we consider only elections with at least 100 individuals
 ## This effectively removes case_IDs with only few parties considered. 
@@ -339,7 +350,7 @@ gc()
 ##################################################################
 ### Regression: Can we explain the share of k2?
 ## Polarization data
-polariz.df <- readRDS(file = "polarization.RDS") 
+polariz.df <- readRDS(file = "DATA/polarization.RDS") 
 # adding polarization data to cses.df
 cses.df <- cses.df %>% 
   rename("caseIDiso3c" = "case_ID") %>%
@@ -354,10 +365,24 @@ cses.ols <- cses.df %>%
   unique() %>%
   mutate(year = as.integer(stringr::str_extract(case_ID, "\\d{4}$")))
 
+## alternative: read csesOLS.RDS
+saveRDS(cses.ols2, "DATA/csesOLS.RDS")
+cses.ols <- readRDS("DATA/csesOLS.RDS") 
+cses.ols <- cses.ols %>% 
+  left_join(x = ., y = parties.df, by = "case_ID")
+
+
+# regmods.k2 <- list(
+#   "Main" = "k2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + year",
+#   "RC1"   = "k2_pct ~  factor(ElectSystem) + NbEffParties + year",
+#   "RC2" = "k2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties",
+#   "PartyNb" = "k2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + year + n_parties"
+# )
+
 regmods.k2 <- list(
-  "Main" = "k2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + year",
-  "RC1"   = "k2_pct ~  factor(ElectSystem) + NbEffParties + year",
-  "RC2" = "k2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties"
+  "Main" = "k2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + year + n_parties",
+  "RC1"   = "k2_pct ~  factor(ElectSystem) + NbEffParties + year + n_parties",
+  "RC2" = "k2_pct ~ polarization_parties + factor(ElectSystem) + NbEffParties + n_parties"
 )
 
 olsfun <- function(m){
@@ -377,13 +402,16 @@ modelsummary::modelsummary(olsregs,
     "factor(ElectSystem)2" = "ElecSys-Proport.",
     "factor(ElectSystem)3" = "ElecSys-Mixed",
     "year" = "Time",
-    "Country" = "Country" ),
+    "Country" = "Country",
+    "n_parties" = "Nb. Parties"
+  ),
   vcov = list(
     ~ Country,
     ~ Country,
-    ~ Country + year),
-  gof_omit = "AIC|BIC|Log.|RMSE"#, 
-#  output = "k2ols.tex"
+    ~ Country + year
+  ),
+  gof_omit = "AIC|BIC|Log.|RMSE", 
+  output = "k2olsNEW.tex"
 )
 
 cses.cre <- cses.ols %>%
