@@ -427,13 +427,18 @@ cses.cre <- cses.ols %>%
   ) %>%
   ungroup()
 #
+## temp
+def.mod <- m.cre
+
+
+
 m.cre <- lme4::lmer(
   k2_pct ~ polarization_within +
     polarization_between +
     factor(ElectSystem) +
     parties_within +
     parties_between +
-    year +
+    year + n_parties +   ## n_parties added for temp!
     (1 | Country),
   data = cses.cre
 )
@@ -454,10 +459,20 @@ coef_map = c(
     "factor(ElectSystem)2" = "ElecSys-Proport.",
     "factor(ElectSystem)3" = "ElecSys-Mixed",
     "year" = "Time",
+    "n_parties" = "Nb. parties",
     "Country" = "Country" )
 
 modelsummary(
   m.cre, stars = T,
+  gof_map = gof_map,
+  coef_map = coef_map#,
+#  output = "Mundlak.tex"
+)
+
+
+modelsummary(
+  list("default" = def.mod, "nparties" = m.cre), 
+  stars = T,
   gof_map = gof_map,
   coef_map = coef_map#,
 #  output = "Mundlak.tex"
